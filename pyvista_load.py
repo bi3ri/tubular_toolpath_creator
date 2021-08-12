@@ -8,6 +8,8 @@ from pyvista import examples
 #https://www.brainvoyager.com/bv/doc/UsersGuide/CoordsAndTransforms/SpatialTransformationMatrices.html
 
 
+import rospy
+from geometry_msgs.msg import Quaternion, Pose, PoseArray
 
 
 smoothing_mesh_factor = 5000
@@ -16,6 +18,10 @@ smoothing_mesh_factor = 5000
 
 debug_lines = vtk.vtkAppendPolyData()
 
+
+
+#list of geometry msgs
+hotsprayToolpathMSG = []
 
 
 
@@ -72,7 +78,7 @@ def lookAt(eye, target):
     tz = -np.dot( mz, eye )   
     return np.array([mx[0], my[0], mz[0], 0, mx[1], my[1], mz[1], 0, mx[2], my[2], mz[2], 0, tx, ty, tz, 1])
 
-def rotatePointaroundAxis(p, axis, theta):
+def rotatePointAroundAxis(p, axis, theta):
     # axis = np.asarray(axis)
     # axis = axis / math.sqrt(np.dot(axis, axis))
     # a = math.cos(theta / 2.0)
@@ -241,8 +247,8 @@ rot_begin = 10
 rot_end = 210
 rot_step = 40
 
-segments = []
-segment = vtk.vtkAppendPolyData()
+toolpath_raster = []
+pre_combined_rotation_segment = vtk.vtkAppendPolyData()
 start_pt = None
 end_pt = None
 start_pt_id = 0
@@ -250,17 +256,23 @@ end_pt_id = 0
 old_end_pt = None
 old_end_id = 0
 output = None
-old_output = None
+old_rotation_segement = None
+toolpath_direction = "right"
+
 for r in range (rot_begin, rot_end, rot_step):
     for i in range(0, center_line_size - 1):
         axis = center_line_points[i + 1] - center_line_points[i] 
         #axis_norm = axis / np.linalg.norm(axis)
-        trans_center = center - center_line_points[i] 
-        rot_center = rotatePointaroundAxis(trans_center, axis, r)
+
+        #translate roation_center relative to coordinate ursprung, rotate and translate back
+        translation_center = center - center_line_points[i] 
+        rot_center = rotatePointAroundAxis(translation_center, axis, r)
         rot_center += center_line_points[i]
 
         middle = (center_line_points[i+1] - center_line_points[i])/2 + center_line_points[i]
 
+
+        #cut front of tubular surface relative to rot_center in order to not cut surface twice
         clip = vtk.vtkClipPolyData()
         # clip.SetGenerateClippedOutput(True)
         clip_plane = vtk.vtkPlane()
@@ -269,12 +281,13 @@ for r in range (rot_begin, rot_end, rot_step):
         clip.SetInputData(clipped_coil_array[i]) 
         clip.SetClipFunction(clip_plane)
         clip.Update()
+        #
 
+        #cut surface to create toolpath segment
         cut_plane = vtk.vtkPlane()
         cut_normal = np.cross(center_line_points[i+1] - rot_center, center_line_points[i] - rot_center)
         cut_plane.SetNormal(cut_normal)
         cut_plane.SetOrigin(rot_center)
-
 
         cutter = vtk.vtkCutter()
         cutter.SetCutFunction(cut_plane)
@@ -283,9 +296,12 @@ for r in range (rot_begin, rot_end, rot_step):
         cutter.SetNumberOfContours(1)
         cutter.SetInputConnection(clip.GetOutputPort())
         cutter.Update()
+        rotation_segement = cutter.GetOutput()
         
+        
+        #not sure if i need the next two blocks
         strip_one = vtk.vtkStripper()
-        strip_one.SetInputData(cutter.GetOutput())
+        strip_one.SetInputData(rotation_segement)
         strip_one.JoinContiguousSegmentsOn()
         # strip.SetMaximumLength(1)
         strip_one.Update()
@@ -296,13 +312,15 @@ for r in range (rot_begin, rot_end, rot_step):
         # decimateFilter.SetMaximumError(0.3)
         decimateFilter2.SetInputData(strip_one.GetOutput())
         decimateFilter2.Update()
-        output = decimateFilter2.GetOutput()
+        rotation_segement = decimateFilter2.GetOutput()
 
-        number_of_cells = output.GetLines().GetNumberOfConnectivityIds()
-        p1_id = output.GetLines().GetData().GetValue(number_of_cells)
-        p2_id = output.GetCell(0).GetPointId(0)
-        p1 = output.GetPoint(p1_id)
-        p2 = output.GetPoint(p2_id)
+
+        #closing gaps between two cut plane segments
+        number_of_cells = rotation_segement.GetLines().GetNumberOfConnectivityIds()
+        p1_id = rotation_segement.GetLines().GetData().GetValue(number_of_cells)
+        p2_id = rotation_segement.GetCell(0).GetPointId(0)
+        p1 = rotation_segement.GetPoint(p1_id)
+        p2 = rotation_segement.GetPoint(p2_id)
 
         # A  
         if i == 0:
@@ -313,7 +331,7 @@ for r in range (rot_begin, rot_end, rot_step):
             else:
                 old_end_pt = p1
                 old_end_id = p1_id
-            old_output = output
+            old_rotation_segement = rotation_segement
 
         #B
         if i > 0 & i < center_line_size:
@@ -336,25 +354,114 @@ for r in range (rot_begin, rot_end, rot_step):
             mz = ((old_end_pt[2] - start_pt[2]) / 2) + start_pt[2]
             m = (mx, my, mz)
 
-            output.GetPoints().SetPoint(start_pt_id, m)
-            old_output.GetPoints().SetPoint(old_end_id, m)
+            rotation_segement.GetPoints().SetPoint(start_pt_id, m)
+            old_rotation_segement.GetPoints().SetPoint(old_end_id, m)
 
-            segment.AddInputData(old_output)
-            old_output = output
+            pre_combined_rotation_segment.AddInputData(old_rotation_segement)
+            old_rotation_segement = rotation_segement
             old_end_id = end_pt_id
             old_end_pt = end_pt
 
 
+    #add last rotation_segement to pre_combined_rotation_segment
+    pre_combined_rotation_segment.AddInputData(rotation_segement)
+    pre_combined_rotation_segment.Update()
 
-    segment.AddInputData(output)
-    segment.Update()
-
+    #create one polyline out of many lines
     strip = vtk.vtkStripper()
-    strip.SetInputData(segment.GetOutput())
+    strip.SetInputData(pre_combined_rotation_segment.GetOutput())
     strip.JoinContiguousSegmentsOn()
     # strip.SetMaximumLength(1)
     strip.Update()
-    segments.append(strip.GetOutput())
+    combined_rotation_segment = strip.GetOutput()
+    toolpath_raster.append(combined_rotation_segment)
+
+    ### create toolpath poses
+
+    combined_rotation_segment_points = combined_rotation_segment.GetPoints()
+    
+    combined_rotation_segment_pose_array = PoseArray()
+
+    #first 
+    pose = Pose()
+    next_pose = Pose()
+    next_pose.position.x = combined_rotation_segment_points.GetPoint(i)[0]
+    next_pose.position.y = combined_rotation_segment_points.GetPoint(i)[1]
+    next_pose.position.z = combined_rotation_segment_points.GetPoint(i)[2]
+
+    segment_length = combined_rotation_segment_points.GetNumberOfPoints()
+
+    
+
+    if toolpath_direction == "right":
+        start_id = 1
+        end_id = segment_length
+    else:
+        start_id = segment_length
+        end_id = 1
+        
+
+    for i in range(start_id, end_id - 1):
+        pose = next_pose
+        next_pose.position.x = combined_rotation_segment_points.GetPoint(i)[0]
+        next_pose.position.y = combined_rotation_segment_points.GetPoint(i)[1]
+        next_pose.position.z = combined_rotation_segment_points.GetPoint(i)[2]
+
+        #get vz direction vector 
+        # minus mitte + center
+        vz = (rot_center - [pose.position.x, pose.position.y, pose.position.z]).normalize()
+        toolpath_direction_vector = ([next_pose.position.x, next_pose.position.y, next_pose.position.z] 
+                                    - [pose.position.x, pose.position.y, pose.position.z])
+        vy = vz.cross(toolpath_direction_vector)
+        vx = vz.cross(vy)
+
+        R = [vx, vy, vz]
+        m = R
+
+        qw = math.sqrt(1.0 + m[0,0] + R[1,1] + R[2,2]) / 2.0
+        w4 = (4.0 * qw)
+        qx = (m[2,1] - m[1,2] / w4)
+        qy = (m[0,2] - m[2,0] / w4)
+        qz = (m[1,0] - m[0,1] / w4)
+
+        pose.orientation.w = qw
+        pose.orientation.x = qx
+        pose.orientation.y = qy
+        pose.orientation.z = qz
+
+        combined_rotation_segment_pose_array.poses.append(pose)
+
+
+    #last pose gets orientation from point before rotation
+    last_pose = Pose()
+    last_pose.position.x = combined_rotation_segment_points.GetPoint(end_id)[0]
+    last_pose.position.y = combined_rotation_segment_points.GetPoint(end_id)[1]
+    last_pose.position.z = combined_rotation_segment_points.GetPoint(end_id)[2]
+    last_pose.orientation.w = pose.orientation.w
+    last_pose.orientation.x = pose.orientation.x
+    last_pose.orientation.y = pose.orientation.y
+    last_pose.orientation.z = pose.orientation.z
+
+    combined_rotation_segment_pose_array.poses.append(last_pose)
+
+    hotsprayToolpathMSG.append(combined_rotation_segment_pose_array)
+
+    
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
    
 debug_line = vtk.vtkLineSource()
@@ -394,12 +501,6 @@ normal_array = normal_filter.GetOutput().GetCellData().GetNormals()
 
 
 #         break
-
-
-
-
-
-
 #         idx = 0
 #         vz = (0, 0, 0)
 #         segment.GetPointData().GetNormals().GetTuple(idx, vz.data())
