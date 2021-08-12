@@ -382,26 +382,25 @@ for r in range (rot_begin, rot_end, rot_step):
     
     combined_rotation_segment_pose_array = PoseArray()
 
-    #first 
-    pose = Pose()
-    next_pose = Pose()
-    next_pose.position.x = combined_rotation_segment_points.GetPoint(i)[0]
-    next_pose.position.y = combined_rotation_segment_points.GetPoint(i)[1]
-    next_pose.position.z = combined_rotation_segment_points.GetPoint(i)[2]
-
-    segment_length = combined_rotation_segment_points.GetNumberOfPoints()
-
-    
 
     if toolpath_direction == "right":
         start_id = 1
-        end_id = segment_length
+        end_id = combined_rotation_segment_points.GetNumberOfPoints() - 1
+        first_id = 0
     else:
-        start_id = segment_length
-        end_id = 1
+        start_id = combined_rotation_segment_points.GetNumberOfPoints() - 1
+        end_id = 0
+        first_id = start_id - 1
+
+    #start pose
+    pose = Pose()
+    next_pose = Pose()
+    next_pose.position.x = combined_rotation_segment_points.GetPoint(start_id)[0]
+    next_pose.position.y = combined_rotation_segment_points.GetPoint(start_id)[1]
+    next_pose.position.z = combined_rotation_segment_points.GetPoint(start_id)[2]
         
 
-    for i in range(start_id, end_id - 1):
+    for i in range(start_id , end_id):
         pose = next_pose
         next_pose.position.x = combined_rotation_segment_points.GetPoint(i)[0]
         next_pose.position.y = combined_rotation_segment_points.GetPoint(i)[1]
@@ -409,16 +408,21 @@ for r in range (rot_begin, rot_end, rot_step):
 
         #get vz direction vector 
         # minus mitte + center
-        vz = (rot_center - [pose.position.x, pose.position.y, pose.position.z]).normalize()
-        toolpath_direction_vector = ([next_pose.position.x, next_pose.position.y, next_pose.position.z] 
-                                    - [pose.position.x, pose.position.y, pose.position.z])
-        vy = vz.cross(toolpath_direction_vector)
-        vx = vz.cross(vy)
+        vz = (rot_center - [pose.position.x, pose.position.y, pose.position.z])
+        vz_norm = vz / np.linalg.norm(vz)
 
-        R = [vx, vy, vz]
+        toolpath_direction_vector = (np.array([next_pose.position.x, next_pose.position.y, next_pose.position.z])
+                                    - np.array([pose.position.x, pose.position.y, pose.position.z]))
+        vy = np.cross(vz, toolpath_direction_vector)
+        vy_norm = vy / np.linalg.norm(vy)
+
+        vx = np.cross(vz, vy)
+        vx_norm = vx / np.linalg.norm(vx)
+
+        R = np.array([vx_norm, vy_norm, vz_norm])
         m = R
 
-        qw = math.sqrt(1.0 + m[0,0] + R[1,1] + R[2,2]) / 2.0
+        qw = math.sqrt(1.0 + m[0,0] + m[1,1] + m[2,2]) / 2.0
         w4 = (4.0 * qw)
         qx = (m[2,1] - m[1,2] / w4)
         qy = (m[0,2] - m[2,0] / w4)
@@ -521,11 +525,11 @@ mesh_actor.GetProperty().SetOpacity(.3)
 mesh_actor.SetMapper(mesh_mapper)
 mesh_actor.GetProperty().SetColor(colors.GetColor3d('Yellow'))
 
-intersect_mapper = vtk.vtkPolyDataMapper()
-intersect_mapper.SetInputData(segment.GetOutput())
-intersect_actor = vtk.vtkActor()
-intersect_actor.SetMapper(intersect_mapper)
-intersect_actor.GetProperty().SetColor(colors.GetColor3d('Yellow'))
+# intersect_mapper = vtk.vtkPolyDataMapper()
+# intersect_mapper.SetInputData(combined_rotation_segment.GetOutput())
+# intersect_actor = vtk.vtkActor()
+# intersect_actor.SetMapper(intersect_mapper)
+# intersect_actor.GetProperty().SetColor(colors.GetColor3d('Yellow'))
 
 plane_mapper = vtk.vtkPolyDataMapper()
 # plane_mapper.SetInputConnection(clip_plane)
@@ -553,11 +557,11 @@ debug_line_actor.GetProperty().SetColor(colors.GetColor3d('Red'))
 # point_actor.SetMapper(point_mapper)
 # point_actor.GetProperty().SetColor(colors.GetColor3d('Red'))
 
-cut_line_mapper = vtk.vtkPolyDataMapper()
-cut_line_mapper.SetInputData(segments[0])#.GetOutput())#.GetOutputPort())
-cut_line_actor = vtk.vtkActor()
-cut_line_actor.SetMapper(cut_line_mapper)
-cut_line_actor.GetProperty().SetColor(colors.GetColor3d('Green'))
+# cut_line_mapper = vtk.vtkPolyDataMapper()
+# cut_line_mapper.SetInputData(segments[0])#.GetOutput())#.GetOutputPort())
+# cut_line_actor = vtk.vtkActor()
+# cut_line_actor.SetMapper(cut_line_mapper)
+# cut_line_actor.GetProperty().SetColor(colors.GetColor3d('Green'))
 
 renderer = vtk.vtkRenderer()
 renderWindow = vtk.vtkRenderWindow()
@@ -574,10 +578,10 @@ axes.SetTotalLength(2.5, 2.5, 2.5)
 renderer.AddViewProp(mesh_actor)
 renderer.AddViewProp(plane_actor)
 renderer.AddViewProp(line_actor)
-renderer.AddViewProp(intersect_actor)
+# renderer.AddViewProp(intersect_actor)
 renderer.AddViewProp(axes)
 # renderer.AddViewProp(clipper_actor)
-renderer.AddViewProp(cut_line_actor)
+# renderer.AddViewProp(cut_line_actor)
 # renderer.AddViewProp(point_actor)
 # renderer.AddViewProp(debug_line_actor)
 
