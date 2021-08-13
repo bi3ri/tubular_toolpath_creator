@@ -68,7 +68,6 @@ def lines_from_points(points):
 def normalize(v):
     return np.true_divide(v, np.linalg.norm(v))
 
-
 def lookAt(eye, target):
     mz = normalize( (eye[0]-target[0], eye[1]-target[1], eye[2]-target[2]) ) # inverse line of sight
     mx = normalize( np.cross( [0,0,1], mz ) )
@@ -79,15 +78,6 @@ def lookAt(eye, target):
     return np.array([mx[0], my[0], mz[0], 0, mx[1], my[1], mz[1], 0, mx[2], my[2], mz[2], 0, tx, ty, tz, 1])
 
 def rotatePointAroundAxis(p, axis, theta):
-    # axis = np.asarray(axis)
-    # axis = axis / math.sqrt(np.dot(axis, axis))
-    # a = math.cos(theta / 2.0)
-    # b, c, d = -axis * math.sin(theta / 2.0)
-    # aa, bb, cc, dd = a * a, b * b, c * c, d * d
-    # bc, ad, ac, ab, bd, cd = b * c, a * d, a * c, a * b, b * d, c * d
-    # R = np.array([[aa + bb - cc - dd, 2 * (bc + ad), 2 * (bd - ac)],
-    #                  [2 * (bc - ad), aa + cc - bb - dd, 2 * (cd + ab)],
-    #                  [2 * (bd + ac), 2 * (cd - ab), aa + dd - bb - cc]])
 
     theta = math.radians(theta)
     axis = axis / np.linalg.norm(axis)  # normalize the rotation vector first
@@ -138,6 +128,7 @@ decimateFilter.Update()
 center_line_source_reduced = decimateFilter.GetOutput(0)
 center_line = pv.wrap(center_line_source_reduced)
 
+#find center of coil
 center_line_points = center_line.points
 center = np.mean(center_line_points, axis=0)
 center[2] = center_line_points[0][2] #z wird auf z-Wert von erstem Punkt in der centerline gesetzt
@@ -178,12 +169,6 @@ smooth.SetNumberOfIterations(smoothing_mesh_factor)
 # smooth.SetRelaxationFactor(0.6)
 smooth.Update()
 smoothed_mesh = smooth.GetOutput()
-
-
-
-
-
-
 
 # Seperate Mesh in Segments
 
