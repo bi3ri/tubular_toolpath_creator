@@ -1,13 +1,12 @@
 import pyvista as pv
 import vtk
 import numpy as np
-import math
 import rospy
-from scipy.spatial.transform import Rotation
 from geometry_msgs.msg import Pose, PoseArray
 
 from gap_filter import GapFilter
 from utils import loadStl, loadVtp, polydataActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
+from GenerateTubularToolpath.srv import GenerateTubularToolpath
 
 class TubularToolpathServer:
     nodeHandle = None
@@ -23,7 +22,7 @@ class TubularToolpathServer:
         self.rot_end = rospy.get_param('~tubular_toolpath_creator', 'rotation_end')
         self.rot_step = rospy.get_param('~tubular_toolpath_creator', 'rotation_step')
 
-        service = rospy.Service('create_tubular_toolpath', TODO, self.handle_request)
+        service = rospy.Service('create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
 
     # def reducePolylinePointResolution(center_line_source):
     #     decimateFilter = vtk.vtkDecimatePolylineFilter()
@@ -155,10 +154,13 @@ class TubularToolpathServer:
             start_id = 1
             end_id = combined_rotation_segment_points.GetNumberOfPoints() - 1
             first_id = 0
+            toolpath_direction = "left"
         else:
             start_id = combined_rotation_segment_points.GetNumberOfPoints() - 1
             end_id = 0
             first_id = start_id - 1
+            toolpath_direction = "right"
+
 
         #start pose
         pose = Pose()
@@ -203,9 +205,10 @@ class TubularToolpathServer:
 
         combined_rotation_segment_pose_array.poses.append(last_pose)
 
+        return combined_rotation_segment_pose_array, toolpath_direction
+
     def createToolpath(self, center_line_points, mesh_segments):
         toolpath_raster = []
-        toolpath_raster_list = []
         toolpath_direction = "right"
 
         center = self.findCenterOfCoil(center_line_points)
@@ -235,13 +238,11 @@ class TubularToolpathServer:
             gap_filter.addLastSegment(rotation_segement)
             combined_rotation_segment = gap_filter.getCombinedRotationSegement()
 
-            toolpath_raster.append(combined_rotation_segment)
-
             ### create toolpath poses
-            combined_rotation_segment_pose_array = self.createRotationSegmentPoseArray(combined_rotation_segment, toolpath_direction, rot_center)
-            toolpath_raster_list.append(combined_rotation_segment_pose_array)
+            combined_rotation_segment_pose_array, toolpath_direction = self.createRotationSegmentPoseArray(combined_rotation_segment, toolpath_direction, rot_center)
+            toolpath_raster.append(combined_rotation_segment_pose_array)
 
-        return toolpath_raster_list
+        return toolpath_raster
 
 
     def run(self, mesh_path, centerline_path):
@@ -263,6 +264,9 @@ class TubularToolpathServer:
     def handle_request(self, req):
         toolpath_raster = self.run(req.mesh_path, req.centerline_path)
 
-        return(TubularToolpathResponse(toolpath_raster))
+        response = GenerateTubularToolpath()
+        response.res = toolpath_raster
+
+        return(response)
 
 
