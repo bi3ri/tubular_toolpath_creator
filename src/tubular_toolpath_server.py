@@ -5,7 +5,7 @@ import rospy
 from geometry_msgs.msg import Pose, PoseArray
 
 from gap_filter import GapFilter
-from utils import loadStl, loadVtp, polydataActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
+from utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
 from GenerateTubularToolpath.srv import GenerateTubularToolpath
 
 class TubularToolpathServer:

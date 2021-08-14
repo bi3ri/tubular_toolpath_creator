@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="2">
-  <name>testPackage</name>
-  <version>0.0.0</version>
+  <name>tubular_toolpath_creator</name>
+  <version>1.0.0</version>
   <description>The testPackage package</description>
 
   <!-- One maintainer tag required, multiple allowed, one person per tag -->
@@ -49,9 +49,18 @@
   <!-- Use doc_depend for packages you need only for building documentation: -->
   <!--   <doc_depend>doxygen</doc_depend> -->
   <buildtool_depend>catkin</buildtool_depend>
-  <build_depend>test1</build_depend>
-  <build_export_depend>test1</build_export_depend>
-  <exec_depend>test1</exec_depend>
+  <depend>geometry_msgs</depend>
+
+  <build_depend>message_generation</build_depend>
+
+  <!-- <exec_depend>geometry_msgs</exec_depend> -->
+  <exec_depend>message_runtime</exec_depend>
+
+  <exec_depend>python-vtk</exec_depend>
+  <exec_depend>pyvista</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <exec_depend>python-open3d-pip</exec_depend>
+
 
 
   <!-- The export tag contains other, unspecified, tags -->
