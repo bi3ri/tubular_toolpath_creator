@@ -166,9 +166,9 @@ include
 ## Mark executable scripts (Python etc.) for installation
 ## in contrast to setup.py, you can choose the destination
 catkin_install_python(PROGRAMS
-  src/gap_filter.py
-  src/tubular_toolpath_server.py
-  src/utils.py
+  include/tubular_toolpath_creator/gap_filter.py
+  include/tubular_toolpath_creator/tubular_toolpath_server.py
+  include/tubular_toolpath_creator/utils.py
   src/tubular_toolpath_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

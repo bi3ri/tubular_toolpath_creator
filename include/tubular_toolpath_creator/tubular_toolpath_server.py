@@ -6,11 +6,12 @@ import vtk
 import numpy as np
 from geometry_msgs.msg import Pose, PoseArray
 
-import tubular_toolpath_creator.utils
+
+from tubular_toolpath_creator.gap_filter import GapFilter
 
 # from gap_filter import GapFilter
 from tubular_toolpath_creator.utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
-from GenerateTubularToolpath.srv import GenerateTubularToolpath
+from tubular_toolpath_creator.srv import GenerateTubularToolpath
 
 class TubularToolpathServer:
     nodeHandle = None
@@ -21,7 +22,7 @@ class TubularToolpathServer:
     rot_end = 210
     rot_step = 40
 
-    def __init__(self, rotation_begin, rotation_end, rotation_step):
+    def __init__(self):
         self.rot_begin = rospy.get_param('~tubular_toolpath_creator', 'rotation_begin') #hier parameter von nodeHandle
         self.rot_end = rospy.get_param('~tubular_toolpath_creator', 'rotation_end')
         self.rot_step = rospy.get_param('~tubular_toolpath_creator', 'rotation_step')

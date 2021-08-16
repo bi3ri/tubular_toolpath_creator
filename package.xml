@@ -68,7 +68,8 @@
   <exec_depend>python3-numpy</exec_depend>
   <exec_depend>python-open3d-pip</exec_depend>
 
-
+<build_depend>std_msgs</build_depend> 
+<exec_depend>std_msgs</exec_depend>
 
   <!-- The export tag contains other, unspecified, tags -->
   <export>
