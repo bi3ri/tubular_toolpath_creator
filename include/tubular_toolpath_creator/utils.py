@@ -89,6 +89,12 @@ def rotatePointAroundAxis(p, axis, theta):
     rot = Rotation.from_rotvec(theta * axis)
     return rot.apply(p)
 
+def euclideanDistancePose(p1, p2):
+    x_dis = p1.position.x - p2.position.x
+    y_dis = p1.position.y - p2.position.y
+    z_dis = p1.position.z - p2.position.z
+    return math.sqrt(x_dis^2 + y_dis^2 + z_dis^2)
+
 def fillGapsInMesh(input_path, output_path):
     print("Load a ply point cloud, print it, and render it")
     pcd = o3d.io.read_point_cloud(input_path)

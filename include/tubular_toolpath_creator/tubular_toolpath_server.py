@@ -10,13 +10,14 @@ from geometry_msgs.msg import Pose, PoseArray
 from tubular_toolpath_creator.gap_filter import GapFilter
 
 # from gap_filter import GapFilter
-from tubular_toolpath_creator.utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
+from tubular_toolpath_creator.utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh, euclideanDistancePose
 from tubular_toolpath_creator.srv import GenerateTubularToolpath
 
 class TubularToolpathServer:
     nodeHandle = None
     plotter = pv.Plotter()
     smoothing_mesh_factor = 5000
+    pose_spacing = 100
     # colors = vtk.vtkNamedColors() 
     rot_begin = 10
     rot_end = 210
@@ -37,7 +38,6 @@ class TubularToolpathServer:
     #     decimateFilter.Update()
     #     center_line_source_reduced = decimateFilter.GetOutput(0)
     #     center_line = pv.wrap(center_line_source_reduced)
-
     #     center_line_points = center_line.points
     #     return center_line_points
 
@@ -134,7 +134,7 @@ class TubularToolpathServer:
         cutter.Update()
         rotation_segement = cutter.GetOutput()
         
-        #not sure if i need the next two blocks
+        #TODO: not sure if i need the next two blocks
         strip_one = vtk.vtkStripper()
         strip_one.SetInputData(rotation_segement)
         strip_one.JoinContiguousSegmentsOn()
@@ -175,10 +175,14 @@ class TubularToolpathServer:
         next_pose.position.z = combined_rotation_segment_points.GetPoint(first_id)[2]
             
         for i in range(start_id , end_id):
+            
             pose = next_pose
             next_pose.position.x = combined_rotation_segment_points.GetPoint(i)[0]
             next_pose.position.y = combined_rotation_segment_points.GetPoint(i)[1]
             next_pose.position.z = combined_rotation_segment_points.GetPoint(i)[2]
+
+            if euclideanDistancePose(pose, next_pose) < self.pose_spacing:
+                continue
 
             #get vz direction vector 
             vz_norm = normalize(rot_center - [pose.position.x, pose.position.y, pose.position.z])
