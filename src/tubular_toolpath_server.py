@@ -1,18 +1,22 @@
+#!/usr/bin/env python
+import rospy
+
 import pyvista as pv
 import vtk
 import numpy as np
-import rospy
 from geometry_msgs.msg import Pose, PoseArray
 
-from gap_filter import GapFilter
-from utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
+import tubular_toolpath_creator.utils
+
+# from gap_filter import GapFilter
+from tubular_toolpath_creator.utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh
 from GenerateTubularToolpath.srv import GenerateTubularToolpath
 
 class TubularToolpathServer:
     nodeHandle = None
     plotter = pv.Plotter()
     smoothing_mesh_factor = 5000
-    colors = vtk.vtkNamedColors() 
+    # colors = vtk.vtkNamedColors() 
     rot_begin = 10
     rot_end = 210
     rot_step = 40
@@ -36,7 +40,7 @@ class TubularToolpathServer:
     #     center_line_points = center_line.points
     #     return center_line_points
 
-    def findCenterOfCoil(center_line_points):
+    def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
         center[2] = center_line_points[0][2] 
         return center
@@ -50,7 +54,7 @@ class TubularToolpathServer:
     #     smoothed_mesh = smooth.GetOutput()
     #     return smoothed_mesh
 
-    def splitMeshInSegments(center_line_points, mesh):
+    def splitMeshInSegments(self, center_line_points, mesh):
         center_line_size = center_line_points.shape[0]
         middle = center_line_size // 2
         clipped_coil_array = [None] * (center_line_size - 1)
@@ -104,7 +108,7 @@ class TubularToolpathServer:
         return clipped_coil_array
 
 
-    def createRotationSegment(coil_segment, cut_normal, rot_center, centerline_segment_middle):
+    def createRotationSegment(self, coil_segment, cut_normal, rot_center, centerline_segment_middle):
         #cut front of tubular surface relative to rot_center in order to not cut surface twice
         clip = vtk.vtkClipPolyData()
         # clip.SetGenerateClippedOutput(True)
@@ -146,7 +150,7 @@ class TubularToolpathServer:
 
         return rotation_segement
 
-    def createRotationSegmentPoseArray(combined_rotation_segment, toolpath_direction, rot_center):
+    def createRotationSegmentPoseArray(self, combined_rotation_segment, toolpath_direction, rot_center):
         combined_rotation_segment_points = combined_rotation_segment.GetPoints()
         combined_rotation_segment_pose_array = PoseArray()
 

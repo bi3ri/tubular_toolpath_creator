@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import rospy
 
 from tubular_toolpath_server import TubularToolpathServer

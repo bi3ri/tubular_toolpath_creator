@@ -53,8 +53,15 @@
 
   <build_depend>message_generation</build_depend>
 
+
+  <depend>rospy</depend>
+
+
   <!-- <exec_depend>geometry_msgs</exec_depend> -->
   <exec_depend>message_runtime</exec_depend>
+
+  <!-- <exec_depend>rospy</exec_depend> -->
+
 
   <exec_depend>python-vtk</exec_depend>
   <exec_depend>pyvista</exec_depend>

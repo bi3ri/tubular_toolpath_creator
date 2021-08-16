@@ -110,6 +110,7 @@ catkin_package(
  CATKIN_DEPENDS 
   geometry_msgs
   message_runtime
+  rospy
 #  DEPENDS 
 #   system_lib
 )
@@ -118,12 +119,12 @@ catkin_package(
 ## Build ##
 ###########
 
-## Specify additional locations of header files
-## Your package locations should be listed before other locations
-# include_directories(
-# include
-  # ${catkin_INCLUDE_DIRS}
-# )
+# Specify additional locations of header files
+# Your package locations should be listed before other locations
+include_directories(
+include
+  ${catkin_INCLUDE_DIRS}
+)
 
 ## Declare a C++ library
 # add_library(${PROJECT_NAME}
@@ -193,12 +194,12 @@ catkin_install_python(PROGRAMS
 #   PATTERN ".svn" EXCLUDE
 # )
 
-## Mark other files for installation (e.g. launch and bag files, etc.)
-# install(FILES
-#   # myfile1
-#   # myfile2
-#   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
-# )
+# Mark other files for installation (e.g. launch and bag files, etc.)
+install(FILES
+  # myfile1
+  # myfile2
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
+)
 
 #############
 ## Testing ##

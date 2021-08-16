@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 import vtk
 import math
 import numpy as np
