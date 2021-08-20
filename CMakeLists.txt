@@ -196,6 +196,7 @@ catkin_install_python(PROGRAMS
 
 # Mark other files for installation (e.g. launch and bag files, etc.)
 install(FILES
+  src/test.zsh
   # myfile1
   # myfile2
   DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
