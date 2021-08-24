@@ -1,4 +1,6 @@
 import vtk
+from tubular_toolpath_creator.utils import renderVtkPolydata #debug
+
 
 class GapFilter:
 
@@ -62,6 +64,8 @@ class GapFilter:
             self.old_rotation_segement.GetPoints().SetPoint(self.old_end_id, m)
 
             self.pre_combined_rotation_segment.AddInputData(self.old_rotation_segement)
+            # renderVtkPolydata(self.old_rotation_segement)#debug #problem
+            # renderVtkPolydata(self.pre_combined_rotation_segment.GetOutput())#debug #problem
             self.old_rotation_segement = rotation_segement
             self.old_end_id = self.end_pt_id
             self.old_end_pt = self.end_pt
@@ -71,6 +75,7 @@ class GapFilter:
 
     def getCombinedRotationSegement(self):
         strip = vtk.vtkStripper()
+        self.pre_combined_rotation_segment.Update()
         strip.SetInputData(self.pre_combined_rotation_segment.GetOutput())
         strip.JoinContiguousSegmentsOn()
         # strip.SetMaximumLength(1)

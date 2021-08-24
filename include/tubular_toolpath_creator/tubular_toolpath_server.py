@@ -1,17 +1,20 @@
 #!/usr/bin/env python
 import rospy
+import os
+import subprocess
 
 import pyvista as pv
 import vtk
 import numpy as np
 from geometry_msgs.msg import Pose, PoseArray
 
-
 from tubular_toolpath_creator.gap_filter import GapFilter
-
-# from gap_filter import GapFilter
-from tubular_toolpath_creator.utils import loadStl, loadVtp, polyDataToActor, lines_from_points, normalize, lookAt, directionVectorsToQuaternion, reducePolylinePointResolution, rotatePointAroundAxis, fillGapsInMesh, euclideanDistancePose
+from tubular_toolpath_creator.utils import *
 from tubular_toolpath_creator.srv import GenerateTubularToolpath
+
+data_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
+DEBUG = True
+
 
 class TubularToolpathServer:
     nodeHandle = None
@@ -22,38 +25,19 @@ class TubularToolpathServer:
     rot_begin = 10
     rot_end = 210
     rot_step = 40
+    service = None
 
     def __init__(self):
-        self.rot_begin = rospy.get_param('~tubular_toolpath_creator', 'rotation_begin') #hier parameter von nodeHandle
-        self.rot_end = rospy.get_param('~tubular_toolpath_creator', 'rotation_end')
-        self.rot_step = rospy.get_param('~tubular_toolpath_creator', 'rotation_step')
-
-        service = rospy.Service('create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
-
-    # def reducePolylinePointResolution(center_line_source):
-    #     decimateFilter = vtk.vtkDecimatePolylineFilter()
-    #     decimateFilter.SetTargetReduction(0.97)
-    #     # decimateFilter.SetMaximumError(0.3)
-    #     decimateFilter.SetInputData(center_line_source.GetOutput())
-    #     decimateFilter.Update()
-    #     center_line_source_reduced = decimateFilter.GetOutput(0)
-    #     center_line = pv.wrap(center_line_source_reduced)
-    #     center_line_points = center_line.points
-    #     return center_line_points
+        # self.rot_begin = rospy.get_param('~tubular_toolpath_creator', 'rotation_begin') #hier parameter von nodeHandle
+        # self.rot_end = rospy.get_param('~tubular_toolpath_creator', 'rotation_end')
+        # self.rot_step = rospy.get_param('~tubular_toolpath_creator', 'rotation_step')
+        self.z_clip_height = 0.08
+        self.service = rospy.Service('create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
 
     def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
         center[2] = center_line_points[0][2] 
         return center
-
-    # def smoothMesh(self, coil_mesh_source):
-    #     smooth = vtk.vtkSmoothPolyDataFilter()
-    #     smooth.SetInputData(coil_mesh_source)
-    #     smooth.SetNumberOfIterations(self.smoothing_mesh_factor)
-    #     # smooth.SetRelaxationFactor(0.6)
-    #     smooth.Update()
-    #     smoothed_mesh = smooth.GetOutput()
-    #     return smoothed_mesh
 
     def splitMeshInSegments(self, center_line_points, mesh):
         center_line_size = center_line_points.shape[0]
@@ -72,7 +56,9 @@ class TubularToolpathServer:
         clipper_middle.Update()
 
         right_mesh = clipper_middle.GetOutput(0)
+        saveVtp(data_path + '/debug/right_mesh.vtp', right_mesh)  #debug
         left_mesh = clipper_middle.GetOutput(1)
+        saveVtp(data_path + '/debug/left_mesh.vtp', left_mesh) #debug
 
         remaining_mesh = left_mesh
         for i in range(middle, center_line_size - 1):
@@ -108,7 +94,6 @@ class TubularToolpathServer:
 
         return clipped_coil_array
 
-
     def createRotationSegment(self, coil_segment, cut_normal, rot_center, centerline_segment_middle):
         #cut front of tubular surface relative to rot_center in order to not cut surface twice
         clip = vtk.vtkClipPolyData()
@@ -119,9 +104,9 @@ class TubularToolpathServer:
         clip.SetInputData(coil_segment) 
         clip.SetClipFunction(clip_plane)
         clip.Update()
-        #
+        
         cut_plane = vtk.vtkPlane()
-        cut_normal = np.cross(cut_normal)
+        # cut_normal = np.cross()
         cut_plane.SetNormal(cut_normal)
         cut_plane.SetOrigin(rot_center)
 
@@ -134,7 +119,7 @@ class TubularToolpathServer:
         cutter.Update()
         rotation_segement = cutter.GetOutput()
         
-        #TODO: not sure if i need the next two blocks
+        # TODO: not sure if i need the next two blocks
         strip_one = vtk.vtkStripper()
         strip_one.SetInputData(rotation_segement)
         strip_one.JoinContiguousSegmentsOn()
@@ -166,7 +151,6 @@ class TubularToolpathServer:
             first_id = start_id - 1
             toolpath_direction = "right"
 
-
         #start pose
         pose = Pose()
         next_pose = Pose()
@@ -174,8 +158,7 @@ class TubularToolpathServer:
         next_pose.position.y = combined_rotation_segment_points.GetPoint(first_id)[1]
         next_pose.position.z = combined_rotation_segment_points.GetPoint(first_id)[2]
             
-        for i in range(start_id , end_id):
-            
+        for i in range(start_id, end_id):
             pose = next_pose
             next_pose.position.x = combined_rotation_segment_points.GetPoint(i)[0]
             next_pose.position.y = combined_rotation_segment_points.GetPoint(i)[1]
@@ -225,7 +208,7 @@ class TubularToolpathServer:
 
         gap_filter = GapFilter(center_line_size)
 
-        for r in range (self.rot_begin, self.rot_end, self.rot_step):
+        for r in range(self.rot_begin, self.rot_end, self.rot_step):
             for i in range(0, center_line_size - 1):
                 axis = center_line_points[i + 1] - center_line_points[i] 
                 #axis_norm = axis / np.linalg.norm(axis)
@@ -242,10 +225,12 @@ class TubularToolpathServer:
                 rotation_segement = self.createRotationSegment(mesh_segments[i], cut_normal, rot_center, middle)
 
                 #closing gaps between two cut plane segments
-                gap_filter.addSegment(rotation_segement, center_line_size, i)
+                gap_filter.addSegment(rotation_segement, i)
 
             gap_filter.addLastSegment(rotation_segement)
             combined_rotation_segment = gap_filter.getCombinedRotationSegement()
+            # renderVtkPolydata(combined_rotation_segment)#debug #problem
+
 
             ### create toolpath poses
             combined_rotation_segment_pose_array, toolpath_direction = self.createRotationSegmentPoseArray(combined_rotation_segment, toolpath_direction, rot_center)
@@ -253,20 +238,45 @@ class TubularToolpathServer:
 
         return toolpath_raster
 
+    def computeCenterline(self, input_mesh_path, output_centerline_path):
+        script_path = os.path.normpath( os.path.join(os.path.dirname(__file__), 'conda/toolpath_centerline.bash'))
+        script_path1 = os.path.dirname(__file__)
 
-    def run(self, mesh_path, centerline_path):
-        fillGapsInMesh(mesh_path, mesh_path + '_watertight')
-        mesh = loadStl(mesh_path + '_watertight')
-        smoothed_mesh = self.smoothMesh(mesh)
+        execute_string =  script_path + ' ' + input_mesh_path + ' ' + output_centerline_path
 
+        rc = subprocess.call(execute_string, shell=True)
+
+
+    def run(self, ply_path):
+        # # fill gaps and create mesh with open3d
+        watertight_stl_path = os.path.join(data_path, 'tmp/watertight_coil.stl')
+        # cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01)
+
+        # smooth mesh
+        watertight_mesh = loadStl(watertight_stl_path) 
+        smoothed_mesh = smoothMesh(watertight_mesh, 100)
+
+        # clip mesh
+        clipped_mesh = clipMeshAtZaxis(smoothed_mesh, self.z_clip_height)
+        clipped_vtp_path = os.path.join(data_path, 'tmp/clipped_coil.vtp')
+        saveVtp(clipped_vtp_path, clipped_mesh)
+        
+        centerline_path = os.path.join(data_path, 'tmp/centerline.vtp')
+        # self.computeCenterline(clipped_vtp_path, centerline_path)
         centerline_source = loadVtp(centerline_path)
         centerline = reducePolylinePointResolution(centerline_source)
-        centerline_points = (pv.wrap(centerline)).points
-        # centerline_size = centerline_points.shape[0]
-        
-        mesh_segments = self.splitMeshInSegments(centerline_points, smoothed_mesh)
+        centerline_points = (pv.wrap(centerline)).points #delete pv
 
+
+        
+        mesh_segments = self.splitMeshInSegments(centerline_points, clipped_mesh)
         toolpath_raster = self.createToolpath(centerline_points, mesh_segments)
+
+        idx = 0
+        if DEBUG:
+            for segment in mesh_segments:
+                saveVtp(data_path + '/debug/mesh_segment' + str(idx) + '.vtp', segment)
+                idx+=1
 
         return toolpath_raster
 
@@ -279,3 +289,7 @@ class TubularToolpathServer:
         return(response)
 
 
+
+server = TubularToolpathServer()
+ply_path = os.path.join(data_path, 'original/coil_scan.ply')
+server.run(ply_path)
