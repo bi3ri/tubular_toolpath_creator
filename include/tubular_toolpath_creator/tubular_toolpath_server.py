@@ -33,6 +33,7 @@ class TubularToolpathServer:
         # self.rot_step = rospy.get_param('~tubular_toolpath_creator', 'rotation_step')
         self.z_clip_height = 0.08
         self.service = rospy.Service('create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
+        self.centerlineTargetReduction = 0.95
 
     def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
@@ -264,9 +265,9 @@ class TubularToolpathServer:
         centerline_path = os.path.join(data_path, 'tmp/centerline.vtp')
         # self.computeCenterline(clipped_vtp_path, centerline_path)
         centerline_source = loadVtp(centerline_path)
-        centerline = reducePolylinePointResolution(centerline_source)
+        centerline = reducePolylinePointResolution(centerline_source, self.centerlineTargetReduction)
         centerline_points = (pv.wrap(centerline)).points #delete pv
-
+        print('Number of centerline points: ' + str(centerline_points.shape[0]))
 
         
         mesh_segments = self.splitMeshInSegments(centerline_points, clipped_mesh)

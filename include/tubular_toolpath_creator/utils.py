@@ -42,9 +42,9 @@ def saveVtp(path, mesh):
     # writer.Update()
     writer.Write()
 
-def reducePolylinePointResolution(polyline):
+def reducePolylinePointResolution(polyline, targetReduction):
     decimateFilter = vtk.vtkDecimatePolylineFilter()
-    decimateFilter.SetTargetReduction(0.97)
+    decimateFilter.SetTargetReduction(targetReduction)
     # decimateFilter.SetMaximumError(0.3)
     decimateFilter.SetInputData(polyline)
     decimateFilter.Update()
