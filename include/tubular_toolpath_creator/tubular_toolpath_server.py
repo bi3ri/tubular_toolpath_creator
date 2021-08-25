@@ -33,7 +33,7 @@ class TubularToolpathServer:
         # self.rot_step = rospy.get_param('~tubular_toolpath_creator', 'rotation_step')
         self.z_clip_height = 0.08
         self.service = rospy.Service('create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
-        self.centerlineTargetReduction = 0.95
+        self.centerlineTargetReduction = 0.97 #0.95
 
     def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
@@ -44,9 +44,8 @@ class TubularToolpathServer:
         center_line_size = center_line_points.shape[0]
         middle = center_line_size // 2
         clipped_coil_array = [None] * (center_line_size - 1)
-
         clip_plane_middle = vtk.vtkPlane()
-        normal = center_line_points[middle] - center_line_points[middle+1]
+        normal = center_line_points[middle +1] - center_line_points[middle]
         clip_plane_middle.SetNormal(normal)
         clip_plane_middle.SetOrigin(center_line_points[middle]) 
 
@@ -62,37 +61,41 @@ class TubularToolpathServer:
         saveVtp(data_path + '/debug/left_mesh.vtp', left_mesh) #debug
 
         remaining_mesh = left_mesh
-        for i in range(middle, center_line_size - 1):
+        for i in range(1, middle):
             clip = vtk.vtkClipPolyData()
             clip.SetGenerateClippedOutput(True)
 
             clip_plane = vtk.vtkPlane()
             normal = center_line_points[i+1] - center_line_points[i]
             clip_plane.SetNormal(normal)
-            clip_plane.SetOrigin(center_line_points[i+1]) 
+            clip_plane.SetOrigin(center_line_points[i]) 
             clip.SetInputData(remaining_mesh) 
             clip.SetClipFunction(clip_plane)
             clip.Update()
 
-            clipped_coil_array[i] = clip.GetOutput(1)
+            clipped_coil_array[i - 1] = clip.GetOutput(1)
             remaining_mesh = clip.GetOutput(0)
+
+        clipped_coil_array[middle - 1] = remaining_mesh
 
         remaining_mesh = right_mesh
-        for i in range(0, middle):
+        for i in range(middle + 1, center_line_size - 1):
             clip = vtk.vtkClipPolyData()
             clip.SetGenerateClippedOutput(True)
 
             clip_plane = vtk.vtkPlane()
             normal = center_line_points[i+1] - center_line_points[i]
             clip_plane.SetNormal(normal)
-            clip_plane.SetOrigin(center_line_points[i+1]) 
+            clip_plane.SetOrigin(center_line_points[i]) 
             clip.SetInputData(remaining_mesh) 
             clip.SetClipFunction(clip_plane)
             clip.Update()
 
-            clipped_coil_array[i] = clip.GetOutput(1)
+            clipped_coil_array[i - 1] = clip.GetOutput(1)
             remaining_mesh = clip.GetOutput(0)
 
+        clipped_coil_array[center_line_size - 2] = remaining_mesh
+        
         return clipped_coil_array
 
     def createRotationSegment(self, coil_segment, cut_normal, rot_center, centerline_segment_middle):
@@ -271,7 +274,7 @@ class TubularToolpathServer:
 
         
         mesh_segments = self.splitMeshInSegments(centerline_points, clipped_mesh)
-        toolpath_raster = self.createToolpath(centerline_points, mesh_segments)
+        # toolpath_raster = self.createToolpath(centerline_points, mesh_segments)
 
         idx = 0
         if DEBUG:
@@ -279,7 +282,7 @@ class TubularToolpathServer:
                 saveVtp(data_path + '/debug/mesh_segment' + str(idx) + '.vtp', segment)
                 idx+=1
 
-        return toolpath_raster
+        # return toolpath_raster
 
     def handle_request(self, req):
         toolpath_raster = self.run(req.mesh_path, req.centerline_path)
