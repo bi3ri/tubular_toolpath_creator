@@ -70,9 +70,6 @@ class GapFilter:
             self.old_end_id = self.end_pt_id
             self.old_end_pt = self.end_pt
 
-    def addLastSegment(self, segment):
-        self.pre_combined_rotation_segment.AddInputData(segment)
-
     def getCombinedRotationSegement(self):
         strip = vtk.vtkStripper()
         self.pre_combined_rotation_segment.Update()
