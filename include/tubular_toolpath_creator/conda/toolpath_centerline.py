@@ -106,6 +106,7 @@ class ToolpathCenterline:
     def run(self):
         capped_surface, capCenterIds = self.capSurface()
 
+        print(capCenterIds.GetNumberOfIds())
         assert((capCenterIds.GetNumberOfIds()) == 2)
 
         sourcePoint = capped_surface.GetPoint(capCenterIds.GetId(0))

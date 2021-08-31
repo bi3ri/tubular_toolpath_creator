@@ -1,5 +1,5 @@
 import vtk
-from tubular_toolpath_creator.utils import renderVtkPolydata #debug
+# from tubular_toolpath_creator.utils import renderVtkPolydata #debug
 
 
 class GapFilter:
@@ -16,11 +16,20 @@ class GapFilter:
     pre_combined_rotation_segment = vtk.vtkAppendPolyData()
 
     def __init__(self, center_line_size):
+        self.start_pt = None
+        self.end_pt = None
+        self.start_pt_id = 0
+        self.end_pt_id = 0
+        self.old_end_pt = None
+        self.old_end_id = 0
+        self.output = None
+        self.old_rotation_segement = None
+        self.center_line_size = 0
+        self.pre_combined_rotation_segment = vtk.vtkAppendPolyData()
         self.center_line_size = center_line_size
+        self.index = 0
 
-
-    def addSegment(self, rotation_segement, index):
-
+    def addSegment(self, rotation_segement):
         number_of_cells = rotation_segement.GetLines().GetNumberOfConnectivityIds()
         p1_id = rotation_segement.GetLines().GetData().GetValue(number_of_cells)
         p2_id = rotation_segement.GetCell(0).GetPointId(0)
@@ -28,8 +37,8 @@ class GapFilter:
         p2 = rotation_segement.GetPoint(p2_id)
 
         # A  
-        i = index
-        if i == 0:
+
+        if self.index == 0:
             #check which point is lower on z axis
             if p1[2] < p2[2]:
                 self.old_end_pt = p2
@@ -40,7 +49,7 @@ class GapFilter:
             self.old_rotation_segement = rotation_segement
 
         #B
-        if i > 0 & i < self.center_line_size:
+        if self.index > 0 & self.index < self.center_line_size:
             p1_distance = vtk.vtkMath.Distance2BetweenPoints(self.old_end_pt, p1)
             p2_distance = vtk.vtkMath.Distance2BetweenPoints(self.old_end_pt, p2)
 
@@ -69,8 +78,13 @@ class GapFilter:
             self.old_rotation_segement = rotation_segement
             self.old_end_id = self.end_pt_id
             self.old_end_pt = self.end_pt
+        
+        self.index += 1
+
 
     def getCombinedRotationSegement(self):
+        self.addSegment(self.old_rotation_segement)
+
         strip = vtk.vtkStripper()
         self.pre_combined_rotation_segment.Update()
         strip.SetInputData(self.pre_combined_rotation_segment.GetOutput())

@@ -1,4 +1,5 @@
 .vscode/launch.json
 .vscode/settings.json
-data/**
-data/tmp/clipped_coil.vtp
+data/debug/**
+data/tmp/**
+

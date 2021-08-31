@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import rospy
-
-# from tubular_toolpath_creator.tubular_toolpath_server import TubularToolpathServer
+import os
 
 from tubular_toolpath_creator.tubular_toolpath_server import TubularToolpathServer
+data_path = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
 
 
 rotation_begin = 30
@@ -18,3 +18,14 @@ if __name__ == "__main__":
     # Wait for messages on topic, go to callback function when new messages
     # arrive.
     rospy.spin()
+
+
+# server = TubularToolpathServer()
+# ply_path = os.path.join(data_path, 'original/coil_scan.ply')
+# server.run(ply_path)
+# # server.debug_line.render()
+# server.debug_x.saveVtp(data_path)
+# server.debug_y.saveVtp(data_path)
+# server.debug_z.saveVtp(data_path)
+
+# server.debug_line.save('debug_test')

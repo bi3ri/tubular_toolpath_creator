@@ -2,5 +2,4 @@
 string mesh_path
 ---
 #response
-bool success
 geometry_msgs/PoseArray[] toolpath_raster
