@@ -111,6 +111,7 @@ catkin_package(
   geometry_msgs
   message_runtime
   rospy
+  std_msgs
 #  DEPENDS 
 #   system_lib
 )
@@ -169,6 +170,7 @@ catkin_install_python(PROGRAMS
   include/tubular_toolpath_creator/gap_filter.py
   include/tubular_toolpath_creator/tubular_toolpath_server.py
   include/tubular_toolpath_creator/utils.py
+  include/tubular_toolpath_creator/debug_lines.py
   src/tubular_toolpath_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

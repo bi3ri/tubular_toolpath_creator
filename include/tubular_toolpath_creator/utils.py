@@ -132,15 +132,15 @@ def orthogonalizeMatrix(A):
 #     qz = (m[1,0] - m[0,1] / w4)
 #     return qw, qx, qy, qz
 
-# def directionVectorsToQuaternion(vx, vy, vz):
-#     rotation_matrix = np.array([vx, vy, vz])
-#     r = Rotation.from_matrix(rotation_matrix)
-#     return r.as_quat()
-
 def directionVectorsToQuaternion(vx, vy, vz):
-    m = np.array([vx, vy, vz])
-    quat = tf.transformations.quaternion_from_matrix(m)
-    return quat
+    rotation_matrix = np.array([vx, vy, vz])
+    r = Rotation.from_matrix(rotation_matrix)
+    return r.as_quat()
+
+# def directionVectorsToQuaternion(vx, vy, vz):
+#     m = np.array([vx, vy, vz])
+#     quat = tf.transformations.quaternion_from_matrix(m)
+#     return quat
 
 def rotatePointAroundAxis(p, axis, theta):
     theta = math.radians(theta)
