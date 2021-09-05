@@ -170,7 +170,7 @@ catkin_install_python(PROGRAMS
   include/tubular_toolpath_creator/gap_filter.py
   include/tubular_toolpath_creator/tubular_toolpath_server.py
   include/tubular_toolpath_creator/utils.py
-  include/tubular_toolpath_creator/debug_lines.py
+  include/tubular_toolpath_creator/debug_visualisation.py
   src/tubular_toolpath_node.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )

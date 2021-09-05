@@ -1,15 +1,13 @@
 #!/usr/bin/env python
 import vtk
 import math
-import cmath
 import numpy as np
 import open3d as o3d
 import matplotlib.pyplot as plt #fuer density
 from scipy.spatial.transform import Rotation
 import rospy
 from visualization_msgs.msg import MarkerArray, Marker
-from geometry_msgs.msg import Point, Pose
-import tf.transformations
+from geometry_msgs.msg import Point
 
 def loadStl(fname):
     """Load the given STL file, and return a vtkPolyData object."""
@@ -114,23 +112,9 @@ def lookAt(eye, target):
     return np.array([mx[0], my[0], mz[0], 0, mx[1], my[1], mz[1], 0, mx[2], my[2], mz[2], 0, tx, ty, tz, 1])
 
 def orthogonalizeMatrix(A):
-
     r = (np.transpose(A) - A) / (1 + np.trace(A))
     cay_inner = np.identity(3) + r
     return np.linalg.inv(cay_inner) * cay_inner
-
-# def directionVectorsToQuaternion(vx, vy, vz):
-#     R = np.array([vx, vy, vz])
-#     m = orthogonalizeMatrix(R)
-#     m = R
-
-#     qw_c = cmath.sqrt(1.0 + m[0,0] + m[1,1] + m[2,2]) / 2.0
-#     qw = qw_c.real
-#     w4 = (4.0 * qw)
-#     qx = (m[2,1] - m[1,2] / w4)
-#     qy = (m[0,2] - m[2,0] / w4)
-#     qz = (m[1,0] - m[0,1] / w4)
-#     return qw, qx, qy, qz
 
 def directionVectorsToQuaternion(vx, vy, vz):
     rotation_matrix = np.array([vx, vy, vz])
@@ -149,40 +133,31 @@ def rotatePointAroundAxis(p, axis, theta):
     return rot.apply(p)
 
 def euclideanDistancePose(p1, p2):
-    x_dis = p1.position.x - p2.position.x
-    y_dis = p1.position.y - p2.position.y
-    z_dis = p1.position.z - p2.position.z
+    x_dis = p1[0] - p2[0]
+    y_dis = p1[1] - p2[1]
+    z_dis = p1[2] - p2[2]
     return math.sqrt(x_dis**2 + y_dis**2 + z_dis**2)
 
-def cropAndFillGapsInMesh(input_path, output_path, z_crop_height):
+def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sample_size = 0.01, debug=False):
     pcd = o3d.io.read_point_cloud(input_path)
     crop_bounding_box = o3d.geometry.AxisAlignedBoundingBox([0,0, z_crop_height], [9999,9999,9999])
     cropped_pcd = pcd.crop(crop_bounding_box)
-    # cropped_pcd = o3d.geometry.crop_point_cloud(pcd, (0,0,1), (0,0,0))
-    print(cropped_pcd)
-    # o3d.visualization.draw_geometries([cropped_pcd])
+    if debug: o3d.visualization.draw_geometries([cropped_pcd])
 
-    print("Downsample the point cloud with a voxel of 0.05")
-    downpcd = cropped_pcd.voxel_down_sample(voxel_size=0.05) #TODO: voxel_size as parameter
-    # o3d.visualization.draw_geometries([pcd])
-    # o3d.visualization.draw_geometries([downpcd])
-    pcd = downpcd
-    print(downpcd)
-
-    pcd.normals = o3d.utility.Vector3dVector(np.zeros(
+    down_pcd = cropped_pcd.voxel_down_sample(voxel_down_sample_size) #TODO: voxel_size as parameter
+    if debug: o3d.visualization.draw_geometries([down_pcd])
+    
+    down_pcd.normals = o3d.utility.Vector3dVector(np.zeros(
         (1, 3)))  # invalidate existing normals
-    pcd.estimate_normals()
-    pcd.orient_normals_consistent_tangent_plane(100)
-    # o3d.visualization.draw_geometries([pcd], point_show_normal=True)
+    down_pcd.estimate_normals()
+    down_pcd.orient_normals_consistent_tangent_plane(100)
+    if debug: o3d.visualization.draw_geometries([down_pcd], point_show_normal=True)
 
-    print('run Poisson surface reconstruction')
     with o3d.utility.VerbosityContextManager(
-            o3d.utility.VerbosityLevel.Debug) as cm:
-                mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=7) #higher depth -> higher detail
-    print(mesh)
-    # o3d.visualization.draw_geometries([mesh])
+            o3d.utility.VerbosityLevel.Info) as cm:
+                mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(down_pcd, depth=7) #higher depth -> higher detail
+    if debug: o3d.visualization.draw_geometries([mesh])
 
-    print('visualize densities')
     densities = np.asarray(densities)
     density_colors = plt.get_cmap('plasma')(
         (densities - densities.min()) / (densities.max() - densities.min()))
@@ -192,17 +167,11 @@ def cropAndFillGapsInMesh(input_path, output_path, z_crop_height):
     density_mesh.triangles = mesh.triangles
     density_mesh.triangle_normals = mesh.triangle_normals
     density_mesh.vertex_colors = o3d.utility.Vector3dVector(density_colors)
-    # o3d.visualization.draw_geometries([density_mesh])
-
-
-    # radii = [0.005, 0.01, 0.02, 0.04]
-    # rec_mesh = o3d.geometry.TriangleMesh.create_from_point_cloud_ball_pivoting(
-    #     pcd, o3d.utility.DoubleVector(radii))
-    # o3d.visualization.draw_geometries([pcd, rec_mesh])
+    if debug:  o3d.visualization.draw_geometries([density_mesh])
 
     mesh = o3d.geometry.TriangleMesh.compute_triangle_normals(mesh)
+    if debug: o3d.visualization.draw_geometries([mesh])
     o3d.io.write_triangle_mesh(output_path, mesh)
-    # o3d.visualization.draw_geometries([mesh])
 
 
 def renderVtkPolydata(polydata):
@@ -238,7 +207,7 @@ def renderVtkPolydata(polydata):
     renderWindow.SetWindowName('ReadPolyData')
     renderWindowInteractor.Start()
 
-def convertToAxisMarkers(pose_arrays, 
+def convertPoseArrayToAxisMarkers(pose_arrays, 
                         namespace = 'debug_poses', 
                         frame_id = 'world', 
                         offset = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
@@ -246,8 +215,6 @@ def convertToAxisMarkers(pose_arrays,
                         axis_length = 0.01):
 
     marker_array = MarkerArray()
-
-
     red = [1.0, 0.0, 0.0, 1.0]
     green = [0.0, 1.0, 0.0, 1.0]
     blue = [0.0, 0.0, 1.0, 1.0]
@@ -256,18 +223,12 @@ def convertToAxisMarkers(pose_arrays,
     y_axis_marker = _create_line_marker(green, frame_id, namespace, axis_scale)
     z_axis_marker = _create_line_marker(blue, frame_id, namespace, axis_scale)
 
-
     x_direction = [1, 0, 0]
     y_direction = [0, 1, 0]
     z_direction = [0, 0, 1]
 
     for pose_array in pose_arrays:
         for pose in pose_array.poses:
-
-            #remove outliers #TODO auch fuer return von server.run()!!!!
-            if pose.orientation.x == 0:
-                print('orientation corrupt')
-                continue 
 
             p1, p2 = _create_axis_points(pose, x_direction, axis_length)
             x_axis_marker.points.append(p1)
@@ -280,7 +241,6 @@ def convertToAxisMarkers(pose_arrays,
             x_axis_marker.pose.orientation.z = 0.0
             x_axis_marker.pose.orientation.w = 1.0
 
-
             p1, p2 = _create_axis_points(pose, y_direction, axis_length)
             y_axis_marker.points.append(p1)
             y_axis_marker.points.append(p2)
@@ -292,7 +252,6 @@ def convertToAxisMarkers(pose_arrays,
             y_axis_marker.pose.orientation.z = 0.0
             y_axis_marker.pose.orientation.w = 1.0
 
-            
             p1, p2 = _create_axis_points(pose, z_direction, axis_length)
             z_axis_marker.points.append(p1)
             z_axis_marker.points.append(p2)
@@ -303,7 +262,6 @@ def convertToAxisMarkers(pose_arrays,
             z_axis_marker.pose.orientation.y = 0.0
             z_axis_marker.pose.orientation.z = 0.0
             z_axis_marker.pose.orientation.w = 1.0
-
 
     marker_array.markers.append(x_axis_marker)
     marker_array.markers.append(y_axis_marker)
@@ -316,6 +274,62 @@ def convertToAxisMarkers(pose_arrays,
 
     return marker_array
 
+def convertDirectionVectorPoseToAxisMarkers(pose_array, 
+                        namespace = 'debug_poses', 
+                        frame_id = 'tsdf_origin', 
+                        offset = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
+                        axis_scale = 0.001, 
+                        axis_length = 0.01):
+    
+    marker_array = MarkerArray()
+    red = [1.0, 0.0, 0.0, 1.0]
+    green = [0.0, 1.0, 0.0, 1.0]
+    blue = [0.0, 0.0, 1.0, 1.0]
+
+    x_axis_marker = _create_line_marker(red, frame_id, namespace, axis_scale)
+    y_axis_marker = _create_line_marker(green, frame_id, namespace, axis_scale)
+    z_axis_marker = _create_line_marker(blue, frame_id, namespace, axis_scale)
+
+    for i in range(len(pose_array)//12):
+        p = Point()
+        vx = Point()
+        vy = Point()
+        vz = Point()
+
+        idx = i * 12
+
+        p.x = pose_array[idx+0]
+        p.y = pose_array[idx+1]
+        p.z = pose_array[idx+2]
+        vx.x = (pose_array[idx+3] * axis_length) + p.x
+        vx.y = (pose_array[idx+4] * axis_length) + p.y
+        vx.z = (pose_array[idx+5] * axis_length) + p.z
+        vy.x = (pose_array[idx+6] * axis_length) + p.x
+        vy.y = (pose_array[idx+7] * axis_length) + p.y
+        vy.z = (pose_array[idx+8] * axis_length) + p.z
+        vz.x = (pose_array[idx+9] * axis_length) + p.x
+        vz.y = (pose_array[idx+10] * axis_length) + p.y
+        vz.z = (pose_array[idx+11] * axis_length) + p.z
+
+        x_axis_marker.points.append(p)
+        x_axis_marker.points.append(vx)
+
+        y_axis_marker.points.append(p)
+        y_axis_marker.points.append(vy)
+
+        z_axis_marker.points.append(p)
+        z_axis_marker.points.append(vz)
+
+    marker_array.markers.append(x_axis_marker)
+    marker_array.markers.append(y_axis_marker)
+    marker_array.markers.append(z_axis_marker)
+
+    id = 0
+    for marker in marker_array.markers:
+        marker.id = id
+        id += 1
+
+    return marker_array
 
 def _create_line_marker(color, frame_id, namespace, axis_scale):
     line_marker = Marker()
@@ -336,12 +350,10 @@ def _create_line_marker(color, frame_id, namespace, axis_scale):
     return line_marker
 
 def _create_axis_points(pose, direction, axis_length):
-    
     point1 = Point()
     point1.x = float(pose.position.x)
     point1.y = float(pose.position.y)
     point1.z = float(pose.position.z)
-    
 
     # qx, qy, qz, qw =  pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w
     quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
@@ -355,76 +367,3 @@ def _create_axis_points(pose, direction, axis_length):
     
     return point1, point2
 
-
-# visualization_msgs::MarkerArray HotsprayUtils::convertToAxisMarkers(const std::vector<geometry_msgs::PoseArray>& pose_arrays,
-#                                                      const std::string& frame_id,
-#                                                      const std::string& ns,
-#                                                      const std::size_t& start_id,
-#                                                      const double& axis_scale,
-#                                                      const double& axis_length,
-#                                                     const std::tuple<float, float, float, float, float, float>& offset)
-# {
-#   using namespace Eigen;
-
-#   visualization_msgs::MarkerArray markers;
-
-#   auto create_line_marker = [&](const int id,
-#                                 const std::tuple<float, float, float, float>& rgba) -> visualization_msgs::Marker {
-#     visualization_msgs::Marker line_marker;
-#     line_marker.action = line_marker.ADD;
-#     std::tie(line_marker.color.r, line_marker.color.g, line_marker.color.b, line_marker.color.a) = rgba;
-#     line_marker.header.frame_id = frame_id;
-#     line_marker.type = line_marker.LINE_LIST;
-#     line_marker.id = id;
-#     line_marker.lifetime = ros::Duration(0);
-#     line_marker.ns = ns;
-#     std::tie(line_marker.scale.x, line_marker.scale.y, line_marker.scale.z) = std::make_tuple(axis_scale, 0.0, 0.0);
-#     //line_marker.pose = pose3DtoPoseMsg(offset);
-#     return line_marker;
-#   };
-
-#   // markers for each axis line
-#   int marker_id = start_id;
-#   visualization_msgs::Marker x_axis_marker = create_line_marker(++marker_id, std::make_tuple(1.0, 0.0, 0.0, 1.0));
-#   visualization_msgs::Marker y_axis_marker = create_line_marker(++marker_id, std::make_tuple(0.0, 1.0, 0.0, 1.0));
-#   visualization_msgs::Marker z_axis_marker = create_line_marker(++marker_id, std::make_tuple(0.0, 0.0, 1.0, 1.0));
-
-#   auto add_axis_line = [](const Isometry3d& eigen_pose,
-#                           const Vector3d& dir,
-#                           const geometry_msgs::Point& p1,
-#                           visualization_msgs::Marker& marker) {
-#     geometry_msgs::Point p2;
-#     Eigen::Vector3d line_endpoint;
-
-#     // axis endpoint
-#     line_endpoint = eigen_pose * dir;
-#     std::tie(p2.x, p2.y, p2.z) = std::make_tuple(line_endpoint.x(), line_endpoint.y(), line_endpoint.z());
-
-#     // adding line
-#     marker.points.push_back(p1);
-#     marker.points.push_back(p2);
-#   };
-
-#     for(const geometry_msgs::PoseArray& pose_array : pose_arrays){
-#       for (const geometry_msgs::Pose& pose : pose_array.poses)
-#       {
-#         Eigen::Isometry3d eigen_pose;
-#         tf::poseMsgToEigen(pose, eigen_pose);
-
-#         geometry_msgs::Point p1;
-#         std::tie(p1.x, p1.y, p1.z) = std::make_tuple(pose.position.x, pose.position.y, pose.position.z);
-
-#         add_axis_line(eigen_pose, Vector3d::UnitX() * axis_length, p1, x_axis_marker);
-#         add_axis_line(eigen_pose, Vector3d::UnitY() * axis_length, p1, y_axis_marker);
-#         add_axis_line(eigen_pose, Vector3d::UnitZ() * axis_length, p1, z_axis_marker);
-#       }
-#     }
-
-
-
-
-#   markers.markers.push_back(x_axis_marker);
-#   markers.markers.push_back(y_axis_marker);
-#   markers.markers.push_back(z_axis_marker);
-#   return markers;
-# }

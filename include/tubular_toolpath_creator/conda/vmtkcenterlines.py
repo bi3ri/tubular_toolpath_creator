@@ -21,8 +21,6 @@ from vmtk import vtkvmtk
 from vmtk import vmtkrenderer
 from vmtk import pypes
 
-
-
 ## TODO: make SeedSelector a separate pype script to be used in other contexts
 class vmtkSeedSelector(object):
 
@@ -613,8 +611,8 @@ class vmtkCenterlines(pypes.pypeScript):
                     if i not in self.SourceIds:
                         outletSeedIds.InsertNextId(i)
 
-        self.PrintLog('Computing centerlines.')
-        self.InputInfo('Computing centerlines...')
+        self.InputInfo('Computing centerlines...\n')
+        
 
         centerlineFilter = vtkvmtk.vtkvmtkPolyDataCenterlines()
         centerlineFilter.SetInputData(centerlineInputSurface)
@@ -681,7 +679,6 @@ class vmtkCenterlines(pypes.pypeScript):
 
 
 if __name__=='__main__':
-
     main = pypes.pypeMain()
     main.Arguments = sys.argv
     main.Execute()
