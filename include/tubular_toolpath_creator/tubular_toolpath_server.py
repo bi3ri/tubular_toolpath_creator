@@ -269,9 +269,10 @@ class TubularToolpathServer:
 
     def run(self, ply_path):
         # fill gaps and create mesh with open3d
+        print("tube ply path" + ply_path)
         rospy.loginfo('Loading pointcload and closing gaps.')
         watertight_stl_path = os.path.join(DATA_PATH, 'tmp/watertight_coil.stl')
-        cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01, self.voxel_down_sample_size)#, self.debug)
+        cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01, self.voxel_down_sample_size, self.debug)
 
         # smooth mesh
         watertight_mesh = loadStl(watertight_stl_path) 
