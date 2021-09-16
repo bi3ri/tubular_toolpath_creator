@@ -3,14 +3,14 @@
   <PolyData>
     <Piece NumberOfPoints="1"                    NumberOfVerts="0"                    NumberOfLines="1"                    NumberOfStrips="0"                    NumberOfPolys="0"                   >
       <PointData>
-        <DataArray type="Float64" Name="MaximumInscribedSphereRadius" format="appended" RangeMin="0.048032375722"       RangeMax="0.048032375722"       offset="0"                   />
-        <DataArray type="Int32" Name="EdgeArray" NumberOfComponents="2" format="appended" RangeMin="9168.3465249"         RangeMax="9168.3465249"         offset="48"                  />
+        <DataArray type="Float64" Name="MaximumInscribedSphereRadius" format="appended" RangeMin="0.046940456118"       RangeMax="0.046940456118"       offset="0"                   />
+        <DataArray type="Int32" Name="EdgeArray" NumberOfComponents="2" format="appended" RangeMin="8193.9533804"         RangeMax="8193.9533804"         offset="48"                  />
         <DataArray type="Float64" Name="EdgePCoordArray" format="appended" RangeMin="0"                    RangeMax="0"                    offset="92"                  />
       </PointData>
       <CellData>
       </CellData>
       <Points>
-        <DataArray type="Float32" Name="Points" NumberOfComponents="3" format="appended" RangeMin="0.49746146437"        RangeMax="0.49746146437"        offset="132"                 />
+        <DataArray type="Float32" Name="Points" NumberOfComponents="3" format="appended" RangeMin="0.49571571677"        RangeMax="0.49571571677"        offset="132"                 />
       </Points>
       <Verts>
         <DataArray type="Int64" Name="connectivity" format="appended" RangeMin=""                     RangeMax=""                     offset="184"                 />
@@ -31,6 +31,6 @@
     </Piece>
   </PolyData>
   <AppendedData encoding="base64">
-   _AQAAAACAAAAIAAAAEAAAAA==eJxzunBAdPP0FfYAEtEEGQ==AQAAAACAAAAIAAAADgAAAA==eJwLlmRgCAZiAATmANk=AQAAAACAAAAIAAAACwAAAA==eJxjYIAAAAAIAAE=AQAAAACAAAAMAAAAFAAAAA==eJy7Om+JXa3hYrswiWA7ACYzBOQ=AAAAAACAAAAAAAAAAAAAAACAAAAAAAAAAQAAAACAAAAQAAAACwAAAA==eJxjYEAFAAAQAAE=AQAAAACAAAAIAAAACwAAAA==eJxjYoAAAAAYAAM=AAAAAACAAAAAAAAAAAAAAACAAAAAAAAAAAAAAACAAAAAAAAAAAAAAACAAAAAAAAA
+   _AQAAAACAAAAIAAAAEAAAAA==eJwLWXEsfArHCnsAEY4DnQ==AQAAAACAAAAIAAAADgAAAA==eJxbJMbAsAiIAQh8AXE=AQAAAACAAAAIAAAACwAAAA==eJxjYIAAAAAIAAE=AQAAAACAAAAMAAAAFAAAAA==eJwrSlxqJ8W40G6PUrAdABw8BCA=AAAAAACAAAAAAAAAAAAAAACAAAAAAAAAAQAAAACAAAAQAAAACwAAAA==eJxjYEAFAAAQAAE=AQAAAACAAAAIAAAACwAAAA==eJxjYoAAAAAYAAM=AAAAAACAAAAAAAAAAAAAAACAAAAAAAAAAAAAAACAAAAAAAAAAAAAAACAAAAAAAAA
   </AppendedData>
 </VTKFile>

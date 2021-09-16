@@ -6,7 +6,7 @@
       rotation_end: 160
       rotation_step: 20
       z_clip_height: 0.1
-      voxel_down_sample_size: 0.01
+      voxel_down_sample_size: 0.005
       centerline_target_reduction: 0.93 
       toolpath_segment_point_reduction: 0.01
       smoothing_mesh_factor: 5000.0

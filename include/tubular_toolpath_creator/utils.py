@@ -144,7 +144,7 @@ def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sam
     cropped_pcd = pcd.crop(crop_bounding_box)
     if debug: o3d.visualization.draw_geometries([cropped_pcd])
 
-    down_pcd = cropped_pcd.voxel_down_sample(voxel_down_sample_size) #TODO: voxel_size as parameter
+    down_pcd = cropped_pcd.voxel_down_sample(voxel_down_sample_size) 
     if debug: o3d.visualization.draw_geometries([down_pcd])
     
     down_pcd.normals = o3d.utility.Vector3dVector(np.zeros(
