@@ -2,8 +2,8 @@
 <launch>
   <node name="tubular_toolpath_creator" pkg="tubular_toolpath_creator" type="tubular_toolpath_node.py" output="screen">
     <rosparam >
-      rotation_begin: 30
-      rotation_end: 160
+      rotation_begin: 90
+      rotation_end: 91
       rotation_step: 20
       z_clip_height: 0.1
       voxel_down_sample_size: 0.005

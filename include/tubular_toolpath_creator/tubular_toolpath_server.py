@@ -40,6 +40,8 @@ class TubularToolpathServer:
         self.debug_poses = DebugPoses('tubular_toolpath')
         self.pose_array = []
 
+        self.pose_type = 1
+
     def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
         center[2] = center_line_points[0][2] 
@@ -120,11 +122,22 @@ class TubularToolpathServer:
         self.pose_array.append(float(vz_norm[1]))
         self.pose_array.append(float(vz_norm[2]))
 
-    def createDirectionalVectors(self, p1, p2, rot_center):
+    def createDirectionalVectorsDefault(self, p1, p2, rot_center):
         vx_norm = normalize(p2 - p1)
         p1_rot_center = rot_center - p1
         vy_norm = normalize(np.cross(vx_norm, p1_rot_center))
         vz_norm = normalize(np.cross(vy_norm, vx_norm))
+        return vx_norm, -vy_norm, vz_norm
+
+    def createDirectionalVectorsUpright(self, point, rot_center, vanishing_point):
+        vx_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
+        vy_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
+        vz_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
+        
+        vz_norm = normalize(rot_center - point)
+        vx_norm = normalize(np.cross(vz_norm, vanishing_point))
+        vy_norm = normalize(np.cross(vx_norm, vz_norm))
+
         return vx_norm, vy_norm, vz_norm
 
     def createRotationSegment(self, coil_segment, cut_normal, rot_center, centerline_segment_middle):
@@ -161,7 +174,7 @@ class TubularToolpathServer:
 
         return decimateFilter.GetOutput()
 
-    def createRotationSegmentPoseArray(self, segments, toolpath_direction, rot_centers):
+    def createRotationSegmentPoseArrayDefault(self, segments, toolpath_direction, rot_centers):
         start_id = None
         end_id = None
 
@@ -214,7 +227,7 @@ class TubularToolpathServer:
 
                 if euclideanDistancePose(p1, p2) < self.pose_spacing: continue
                     
-                vx_norm, vy_norm, vz_norm = self.createDirectionalVectors(p1, p2, rot_centers[j])
+                vx_norm, vy_norm, vz_norm = self.createDirectionalVectorsDefault(p1, p2, rot_centers[j])
                 if self.debug: self.debug_poses.addPose(p1, vx_norm, vy_norm, vz_norm)
                 self.appendPose(p1, vx_norm, vy_norm, vz_norm)
                 p1 = copy.deepcopy(p2)
@@ -226,12 +239,34 @@ class TubularToolpathServer:
         p[2] = float(points.GetPoint(last_id)[2])
         self.appendPose(p, vx_norm, vy_norm, vz_norm)
 
+    def createRotationSegmentPoseArrayUpright(self, segments, toolpath_direction, rot_centers, center):
+
+        vanishing_point = center * 10
+    
+        for j in range(len(segments)):
+            points = segments[j].GetPoints()
+
+            for i in range(0, points.GetNumberOfPoints()):
+                point = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
+                point[0] = points.GetPoint(i)[0]
+                point[1] = points.GetPoint(i)[1]
+                point[2] = points.GetPoint(i)[2]
+
+                vx_norm, vy_norm, vz_norm = self.createDirectionalVectorsUpright(point, rot_centers[j], vanishing_point)
+                self.appendPose(point, vx_norm, vy_norm, vz_norm)
+
+
     def createToolpath(self, center_line_points, mesh_segments):
         toolpath_direction = "right"
         center = self.findCenterOfCoil(center_line_points)
         center_line_size = center_line_points.shape[0]
 
+        #fix for rotation direction, cause centerline is randomly created from left to righ or from right to left
+        rotation_direction = 1 if center_line_points[0][0] > center[0] else -1
+
         for r in range(self.rot_begin, self.rot_end, self.rot_step):
+
+
             gap_filter = GapFilter(center_line_size)
             rot_centers = []
 
@@ -240,7 +275,7 @@ class TubularToolpathServer:
 
                 #translate roation_center relative to coordinate origin, rotate and translate back
                 translation_center = center - center_line_points[i] 
-                rot_center = rotatePointAroundAxis(translation_center, axis, r)
+                rot_center = rotatePointAroundAxis(translation_center, axis, rotation_direction * r)
                 rot_center += center_line_points[i]
                 rot_centers.append(rot_center)
 
@@ -258,8 +293,10 @@ class TubularToolpathServer:
 
             ### create toolpath poses
             segments = gap_filter.getSegments()
-            self.createRotationSegmentPoseArray(segments, toolpath_direction, rot_centers)
-            toolpath_direction = "right" if toolpath_direction == "left" else "left"
+            # self.createRotationSegmentPoseArrayDefault(segments, toolpath_direction, rot_centers)
+            self.createRotationSegmentPoseArrayUpright(segments, toolpath_direction, rot_centers, center)
+
+            # toolpath_direction = "right" if toolpath_direction == "left" else "left"
             gap_filter = None
 
     def computeCenterline(self, input_mesh_path, output_centerline_path):
@@ -272,7 +309,7 @@ class TubularToolpathServer:
         print("tube ply path" + ply_path)
         rospy.loginfo('Loading pointcload and closing gaps.')
         watertight_stl_path = os.path.join(DATA_PATH, 'tmp/watertight_coil.stl')
-        cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01, self.voxel_down_sample_size, self.debug)
+        cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01, self.voxel_down_sample_size, False) #self.debug)
 
         # smooth mesh
         watertight_mesh = loadStl(watertight_stl_path) 
@@ -314,6 +351,7 @@ class TubularToolpathServer:
         response = GenerateTubularToolpathResponse()
         response_array = Float64MultiArray()
         response_array.data = self.pose_array
+        self.pose_array = []
         response.toolpath_vector_array = response_array
         return response
 
