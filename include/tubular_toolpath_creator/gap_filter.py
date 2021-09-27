@@ -3,6 +3,8 @@ import vtk
 import tubular_toolpath_creator.utils
 import os
 import numpy as np
+import copy
+
 DATA_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
 
 class GapFilter:
@@ -113,21 +115,30 @@ class GapFilter:
         self.old_end_id = self.end_pt_id
         self.old_end_pt = self.end_pt
     
-    def getSegments(self):
-        self.list.append(self.old_rotation_segement)
+    def getRotationSegments(self):
+        if self.old_rotation_segement != None:
+            self.list.append(self.old_rotation_segement)
+            self.pre_combined_rotation_segment.AddInputData(self.old_rotation_segement)
+
+            self.old_rotation_segement = None
         return self.list
 
     def getCombinedRotationSegement(self):
+        if self.old_rotation_segement != None:
+            self.list.append(self.old_rotation_segement)
+            self.pre_combined_rotation_segment.AddInputData(self.old_rotation_segement)
+            self.old_rotation_segement = None
+
         self.pre_combined_rotation_segment.Update()
-        decimateFilter2 = vtk.vtkDecimatePolylineFilter()
-        decimateFilter2.SetTargetReduction(0.1)
-        decimateFilter2.SetInputData(self.pre_combined_rotation_segment.GetOutput())
-        decimateFilter2.Update()
+        # decimateFilter2 = vtk.vtkDecimatePolylineFilter()
+        # decimateFilter2.SetTargetReduction(0.0)
+        # decimateFilter2.SetInputData(self.pre_combined_rotation_segment.GetOutput())
+        # decimateFilter2.Update()
 
         clean = vtk.vtkCleanPolyData()
         clean.SetTolerance(0.01)
         clean.PointMergingOn()
-        clean.SetInputData(decimateFilter2.GetOutput())
+        clean.SetInputData(self.pre_combined_rotation_segment.GetOutput())
         clean.Update()
 
         strip = vtk.vtkStripper()

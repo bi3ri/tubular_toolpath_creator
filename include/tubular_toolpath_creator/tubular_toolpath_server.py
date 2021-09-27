@@ -10,6 +10,7 @@ from spatialmath import *
 import vtk
 import numpy as np
 from std_msgs.msg import Float64MultiArray
+from geometry_msgs.msg import PoseArray, Pose
 
 from tubular_toolpath_creator.gap_filter import GapFilter
 from tubular_toolpath_creator.utils import *
@@ -38,6 +39,8 @@ class TubularToolpathServer:
         self.publisher = rospy.Publisher('tubular_toolpath_raster', MarkerArray, queue_size=100)
 
         self.debug_poses = DebugPoses('tubular_toolpath')
+        self.pose_array1 = PoseArray()
+
         self.pose_array = []
 
         self.pose_type = 1
@@ -48,7 +51,7 @@ class TubularToolpathServer:
         return center
 
     def splitMeshInSegments(self, center_line_points, mesh):
-        center_line_size = center_line_points.shape[0]
+        center_line_size = len(center_line_points)
         middle = center_line_size // 2
         clipped_coil_array = [None] * (center_line_size - 1)
         clip_plane_middle = vtk.vtkPlane()
@@ -122,24 +125,6 @@ class TubularToolpathServer:
         self.pose_array.append(float(vz_norm[1]))
         self.pose_array.append(float(vz_norm[2]))
 
-    def createDirectionalVectorsDefault(self, p1, p2, rot_center):
-        vx_norm = normalize(p2 - p1)
-        p1_rot_center = rot_center - p1
-        vy_norm = normalize(np.cross(vx_norm, p1_rot_center))
-        vz_norm = normalize(np.cross(vy_norm, vx_norm))
-        return vx_norm, -vy_norm, vz_norm
-
-    def createDirectionalVectorsUpright(self, point, rot_center, vanishing_point):
-        vx_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        vy_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        vz_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        
-        vz_norm = normalize(rot_center - point)
-        vx_norm = normalize(np.cross(vz_norm, vanishing_point))
-        vy_norm = normalize(np.cross(vx_norm, vz_norm))
-
-        return vx_norm, vy_norm, vz_norm
-
     def createRotationSegment(self, coil_segment, cut_normal, rot_center, centerline_segment_middle):
         #cut front of tubular surface relative to rot_center in order to not cut surface twice
         clip = vtk.vtkClipPolyData()
@@ -174,98 +159,87 @@ class TubularToolpathServer:
 
         return decimateFilter.GetOutput()
 
-    def createRotationSegmentPoseArrayDefault(self, segments, toolpath_direction, rot_centers):
-        start_id = None
-        end_id = None
+    def computeDirectionVectors(self, point, old_point, normal):
+        vx_norm = normalize(old_point - point)
+        vy_norm = - normalize(np.cross(vx_norm, normal))
+        vz_norm = - normalize(np.cross(vy_norm, vx_norm))
+        return vx_norm, vy_norm, vz_norm
 
-        if toolpath_direction == "left":
-            points = segments[0].GetPoints()
+    def computeDirectionVectors1(self, point, old_point, normal):
+        vy_norm = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
+        vx_norm = normalize(np.cross(vy_norm, normal))
+        vz_norm = - normalize(np.cross(vy_norm, vx_norm))
+        return vx_norm, vy_norm, vz_norm
 
-            start_id = 1
-            end_id = points.GetNumberOfPoints()
-            first_id = 0
-            last_id = end_id - 1
-        else:
-            segments.reverse()
-            rot_centers.reverse()
-            points = segments[0].GetPoints()
+    def createRotationSegmentPoseArray(self, combined_rotation_segment, clipped_mesh, toolpath_direction):
+        points = combined_rotation_segment.GetPoints()
 
-            start_id = points.GetNumberOfPoints() - 1
-            end_id = -1
-            first_id = start_id - 1
-            last_id = 0
+        normalGenerator = vtk.vtkPolyDataNormals()
+        normalGenerator.SetInputData(clipped_mesh)
+        normalGenerator.ComputePointNormalsOn()
+        normalGenerator.ComputeCellNormalsOff()
+        normalGenerator.Update()
+        mesh_segment_normals = normalGenerator.GetOutput().GetPointData().GetArray("Normals")
 
-        p1 = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        p2 = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
+        point_locator = vtk.vtkPointLocator()
+        point_locator.SetDataSet(clipped_mesh)
+        point_locator.AutomaticOn()
+        point_locator.SetNumberOfPointsPerBucket(2)
+        point_locator.BuildLocator
+
         vx_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
         vy_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
         vz_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
 
-        p1[0] = points.GetPoint(first_id)[0]
-        p1[1] = points.GetPoint(first_id)[1]
-        p1[2] = points.GetPoint(first_id)[2]
+        old_point = vtkPointToNumpyArray(points.GetPoint(0))
 
-        for j in range(len(segments)):
-            points = segments[j].GetPoints()
-            increment = 0
+        raster_strip = []
 
-            if toolpath_direction == "left":
-                start_id = 0
-                end_id = points.GetNumberOfPoints() # - 1
-                last_id = end_id - 1
-                increment = 1
-            else:
-                start_id = points.GetNumberOfPoints() - 1
-                end_id = -1 # 0
-                last_id = 0
-                increment = -1
+        for i in range(1, points.GetNumberOfPoints()):
+            point = vtkPointToNumpyArray(points.GetPoint(i))
 
-            for i in range(start_id, end_id, increment):
-                p2[0] = points.GetPoint(i)[0]
-                p2[1] = points.GetPoint(i)[1]
-                p2[2] = points.GetPoint(i)[2]
+            if euclideanDistancePose(point, old_point) > self.pose_spacing:
 
-                if euclideanDistancePose(p1, p2) < self.pose_spacing: continue
-                    
-                vx_norm, vy_norm, vz_norm = self.createDirectionalVectorsDefault(p1, p2, rot_centers[j])
-                if self.debug: self.debug_poses.addPose(p1, vx_norm, vy_norm, vz_norm)
-                self.appendPose(p1, vx_norm, vy_norm, vz_norm)
-                p1 = copy.deepcopy(p2)
+                point_id = point_locator.FindClosestPoint(point)
+                normal = mesh_segment_normals.GetTuple(point_id)
 
-        # last p1 gets orientation from point before rotation
-        p = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        p[0] = float(points.GetPoint(last_id)[0])
-        p[1] = float(points.GetPoint(last_id)[1])
-        p[2] = float(points.GetPoint(last_id)[2])
-        self.appendPose(p, vx_norm, vy_norm, vz_norm)
+                vx_norm, vy_norm, vz_norm = self.computeDirectionVectors1(point, old_point, normal)
 
-    def createRotationSegmentPoseArrayUpright(self, segments, toolpath_direction, rot_centers, center):
+                if self.debug: self.debug_poses.addPose(old_point, vx_norm, vy_norm, vz_norm)
+                # self.appendPose(point, vx_norm, vy_norm, vz_norm)
+                pose = (point, vx_norm, vy_norm, vz_norm)
+                raster_strip.append(pose)
 
-        vanishing_point = center * 10
-    
-        for j in range(len(segments)):
-            points = segments[j].GetPoints()
+                self.pose_array1.poses.append(convertToPose(point, vx_norm, vy_norm, vz_norm))
 
-            for i in range(0, points.GetNumberOfPoints()):
-                point = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-                point[0] = points.GetPoint(i)[0]
-                point[1] = points.GetPoint(i)[1]
-                point[2] = points.GetPoint(i)[2]
+                old_point = copy.deepcopy(point)
 
-                vx_norm, vy_norm, vz_norm = self.createDirectionalVectorsUpright(point, rot_centers[j], vanishing_point)
-                self.appendPose(point, vx_norm, vy_norm, vz_norm)
+        last_point = vtkPointToNumpyArray(points.GetPoint(points.GetNumberOfPoints() - 1))
+        if self.debug: self.debug_poses.addPose(last_point, vx_norm, vy_norm, vz_norm)
+        self.pose_array1.poses.append(convertToPose(point, vx_norm, vy_norm, vz_norm))
+        pose = (point, vx_norm, vy_norm, vz_norm)
+        raster_strip.append(pose)
+
+        raster_strip.reverse() if toolpath_direction == "left" else None
+        for pose in raster_strip:
+            self.appendPose(pose[0], pose[1], pose[2], pose[3])
 
 
-    def createToolpath(self, center_line_points, mesh_segments):
+
+
+    def createToolpath(self, center_line_points, mesh_segments, clipped_mesh):
         toolpath_direction = "right"
         center = self.findCenterOfCoil(center_line_points)
-        center_line_size = center_line_points.shape[0]
+        center_line_size = len(center_line_points)
+        centerline_orientation = center_line_points[0] - center_line_points[center_line_size-1]
+        center1 = ( (center_line_points[center_line_size-1] - center_line_points[0]) / 2 )  + center_line_points[0]
+
+        # centerline_orientation[2] = 0.5
 
         #fix for rotation direction, cause centerline is randomly created from left to righ or from right to left
         rotation_direction = 1 if center_line_points[0][0] > center[0] else -1
 
         for r in range(self.rot_begin, self.rot_end, self.rot_step):
-
 
             gap_filter = GapFilter(center_line_size)
             rot_centers = []
@@ -287,16 +261,15 @@ class TubularToolpathServer:
 
                 gap_filter.addSegment(rotation_segement)
 
-            if self.debug:
-                combined_rotation_segment = gap_filter.getCombinedRotationSegement()
-                saveVtp(os.path.join(DATA_PATH, ('debug/combined_rotation_segment/combined_rotation_segment_degree_' + str(r) + '.vtp')), combined_rotation_segment)
+            # if self.debug:
+            combined_rotation_segment = gap_filter.getCombinedRotationSegement()
 
-            ### create toolpath poses
-            segments = gap_filter.getSegments()
-            # self.createRotationSegmentPoseArrayDefault(segments, toolpath_direction, rot_centers)
-            self.createRotationSegmentPoseArrayUpright(segments, toolpath_direction, rot_centers, center)
+            saveVtp(os.path.join(DATA_PATH, ('debug/combined_rotation_segment/combined_rotation_segment_degree_' + str(r) + '.vtp')), combined_rotation_segment)
 
-            # toolpath_direction = "right" if toolpath_direction == "left" else "left"
+            self.createRotationSegmentPoseArray(combined_rotation_segment, clipped_mesh, toolpath_direction)
+
+            toolpath_direction = "right" if toolpath_direction == "left" else "left"
+
             gap_filter = None
 
     def computeCenterline(self, input_mesh_path, output_centerline_path):
@@ -321,21 +294,31 @@ class TubularToolpathServer:
         saveVtp(clipped_vtp_path, clipped_mesh)
         
         # compute centerline
-        centerline_path = os.path.join(DATA_PATH, 'tmp/centerline.vtp')
-        self.computeCenterline(clipped_vtp_path, centerline_path)
-        centerline_source = loadVtp(centerline_path)
-        centerline = reducePolylinePointResolution(centerline_source, self.centerline_target_reduction)
-        centerline_points = (pv.wrap(centerline)).points #delete pv
-        rospy.loginfo('Number of centerline points: %i', centerline_points.shape[0])
+        centerline_points = []
+        while len(centerline_points) < 5:
+            centerline_path = os.path.join(DATA_PATH, 'tmp/centerline.vtp')
+            self.computeCenterline(clipped_vtp_path, centerline_path)
+            centerline_source = loadVtp(centerline_path)
+            centerline = reducePolylinePointResolution(centerline_source, self.centerline_target_reduction)
+            # centerline_points = (pv.wrap(centerline)).points #delete pv
+            centerline_points = vtkPointsToNumpyArrayList(centerline.GetPoints())
+            
+            if len(centerline_points) < 5:
+                rospy.loginfo('Number of centerline points %i to small retrying', len(centerline_points))       
+            else:
+                rospy.loginfo('Number of centerline points: %i', len(centerline_points))       
+            
+        if centerline_points[0][0] < centerline_points[0][1]: centerline_points.reverse()
 
         #split mesh in segments
         mesh_segments = self.splitMeshInSegments(centerline_points, clipped_mesh)
 
         #create toolpath poses
-        self.createToolpath(centerline_points, mesh_segments)
+        self.createToolpath(centerline_points, mesh_segments, clipped_mesh)
 
         if self.debug:
             self.debug_poses.saveVtp(DATA_PATH)
+
             idx = 0
             for segment in mesh_segments:
                 saveVtp(os.path.join(DATA_PATH , ('debug/mesh_segments/mesh_segment' + str(idx) + '.vtp')), segment)
@@ -352,6 +335,9 @@ class TubularToolpathServer:
         response_array = Float64MultiArray()
         response_array.data = self.pose_array
         self.pose_array = []
+
+        response.toolpath_raster.append(self.pose_array1)
+
         response.toolpath_vector_array = response_array
         return response
 

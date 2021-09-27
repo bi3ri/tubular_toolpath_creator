@@ -8,5 +8,5 @@ ply_path = "/home/bi3ri/hotspray_ws/src/tubular_toolpath_creator/data/original/c
 if __name__ == "__main__":
     rospy.init_node("tubular_toolpath_creator")
     tubular_toolpath_server = TubularToolpathServer()
-    tubular_toolpath_server.run(ply_path)
+    # tubular_toolpath_server.run(ply_path)
     rospy.spin()

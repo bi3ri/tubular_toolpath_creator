@@ -7,7 +7,21 @@ import matplotlib.pyplot as plt #fuer density
 from scipy.spatial.transform import Rotation
 import rospy
 from visualization_msgs.msg import MarkerArray, Marker
-from geometry_msgs.msg import Point
+from geometry_msgs.msg import Point, Pose, PoseArray
+
+def vtkPointsToNumpyArrayList(vtkpoints):
+    points = []
+    for i in range(vtkpoints.GetNumberOfPoints()):
+        point = vtkPointToNumpyArray(vtkpoints.GetPoint(i))
+        points.append(point)
+    return points
+
+def vtkPointToNumpyArray(vtkpoint):
+    point = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
+    point[0] = vtkpoint[0]
+    point[1] = vtkpoint[1]
+    point[2] = vtkpoint[2]
+    return point
 
 def loadStl(fname):
     """Load the given STL file, and return a vtkPolyData object."""
@@ -120,6 +134,18 @@ def directionVectorsToQuaternion(vx, vy, vz):
     rotation_matrix = np.array([vx, vy, vz])
     r = Rotation.from_matrix(rotation_matrix)
     return r.as_quat()
+
+def convertToPose(point, vx, vy, vz):
+    qx, qy, qz, qw = directionVectorsToQuaternion(vx, vy, vz)
+    pose = Pose()
+    pose.position.x = point[0]
+    pose.position.y = point[1]
+    pose.position.z = point[2]
+    pose.orientation.x = qx
+    pose.orientation.y = qy
+    pose.orientation.z = qz
+    pose.orientation.w = qw
+    return pose
 
 # def directionVectorsToQuaternion(vx, vy, vz):
 #     m = np.array([vx, vy, vz])
