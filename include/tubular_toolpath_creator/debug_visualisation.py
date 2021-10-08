@@ -84,10 +84,10 @@ class DebugPoses:
         self.debug_z = DebugLines('debug_poses/' + name + '_z')
         self.name = name
 
-    def addPose(self, p, vx_norm, vy_norm, vz_norm):
-        self.debug_x.addLine(p, (vx_norm * 0.01) + p)
-        self.debug_y.addLine(p, (vy_norm * 0.01) + p)
-        self.debug_z.addLine(p, (vz_norm * 0.01) + p)
+    def addPose(self, p, rotation_matrix):
+        self.debug_x.addLine(p, (rotation_matrix[:3,:3] @ [1, 0, 0] * 0.01) + p)
+        self.debug_y.addLine(p, (rotation_matrix[:3,:3] @ [0, 1, 0] * 0.01) + p)
+        self.debug_z.addLine(p, (rotation_matrix[:3,:3] @ [0, 0, 1] * 0.01) + p)
 
     def saveVtp(self, path):
         self.debug_x.saveVtp(path)

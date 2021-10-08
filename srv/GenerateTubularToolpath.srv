@@ -2,5 +2,5 @@
 string mesh_path
 ---
 #response
-geometry_msgs/PoseArray[] toolpath_raster
-std_msgs/Float64MultiArray toolpath_vector_array
+std_msgs/Float64MultiArray raster_degrees
+geometry_msgs/PoseArray[] raster_array

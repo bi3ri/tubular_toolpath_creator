@@ -9,11 +9,12 @@ from spatialmath import *
 
 import vtk
 import numpy as np
-from std_msgs.msg import Float64MultiArray
+from std_msgs.msg import Float64MultiArray, Int64
 from geometry_msgs.msg import PoseArray, Pose
 
 from tubular_toolpath_creator.gap_filter import GapFilter
 from tubular_toolpath_creator.utils import *
+from tubular_toolpath_creator.msg import TTCPose, TTCRaster, TTCRasterArray
 from tubular_toolpath_creator.srv import GenerateTubularToolpath, GenerateTubularToolpathResponse
 from tubular_toolpath_creator.debug_visualisation import DebugPoses
 
@@ -29,9 +30,10 @@ class TubularToolpathServer:
         self.z_clip_height = rospy.get_param('~z_clip_height') 
         self.voxel_down_sample_size = rospy.get_param('~voxel_down_sample_size') 
         self.centerline_target_reduction = rospy.get_param('~centerline_target_reduction') 
+        self.centerline_minimal_point_size_treshold = rospy.get_param('~centerline_minimal_point_size_treshold') 
         self.toolpath_segment_point_reduction = rospy.get_param('~toolpath_segment_point_reduction') 
         self.smoothing_mesh_factor = rospy.get_param('~smoothing_mesh_factor') 
-        self.pose_spacing = rospy.get_param('~pose_spacing') 
+        self.pose_spacing = rospy.get_param('~pose_spacing')
         self.frame_id = rospy.get_param('~frame_id')
         self.debug = rospy.get_param('~debug')
 
@@ -40,6 +42,8 @@ class TubularToolpathServer:
 
         self.debug_poses = DebugPoses('tubular_toolpath')
         self.pose_array1 = PoseArray()
+
+        self.response = GenerateTubularToolpathResponse()
 
         self.pose_array = []
 
@@ -159,19 +163,40 @@ class TubularToolpathServer:
 
         return decimateFilter.GetOutput()
 
-    def computeDirectionVectors(self, point, old_point, normal):
+    def createRotationMatrix(self, point, old_point, normal):
         vx_norm = normalize(old_point - point)
         vy_norm = - normalize(np.cross(vx_norm, normal))
         vz_norm = - normalize(np.cross(vy_norm, vx_norm))
-        return vx_norm, vy_norm, vz_norm
 
-    def computeDirectionVectors1(self, point, old_point, normal):
+        R = np.asarray(np.column_stack((vx_norm, vy_norm, vz_norm)), dtype=np.float64)
+        R = np.pad(R, ((0,1),(0,1)))
+        R[3,3] = 1
+
+        return R
+
+    def createRotationMatrixUpright(self, point, old_point, normal):
         vy_norm = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
         vx_norm = normalize(np.cross(vy_norm, normal))
         vz_norm = - normalize(np.cross(vy_norm, vx_norm))
-        return vx_norm, vy_norm, vz_norm
 
-    def createRotationSegmentPoseArray(self, combined_rotation_segment, clipped_mesh, toolpath_direction):
+        R = np.asarray(np.column_stack((vx_norm, vy_norm, vz_norm)), dtype=np.float64)
+        R = np.pad(R, ((0,1),(0,1)))
+        R[3,3] = 1
+        return R
+
+    def createPose(self, point, rotation_matrix):
+        q = tr.quaternion_from_matrix(rotation_matrix)
+        pose = Pose()
+        pose.position.x = point[0]
+        pose.position.y = point[1]
+        pose.position.z = point[2]
+        pose.orientation.w = q[3]
+        pose.orientation.x = q[0]
+        pose.orientation.y = q[1]
+        pose.orientation.z = q[2]
+        return pose
+
+    def createRotationSegmentRaster(self, combined_rotation_segment, clipped_mesh, toolpath_direction):
         points = combined_rotation_segment.GetPoints()
 
         normalGenerator = vtk.vtkPolyDataNormals()
@@ -187,13 +212,9 @@ class TubularToolpathServer:
         point_locator.SetNumberOfPointsPerBucket(2)
         point_locator.BuildLocator
 
-        vx_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        vy_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-        vz_norm = np.asarray([0.0, 0.0, 0.0], dtype=np.float64)
-
+        R = np.asarray((4,4), dtype=np.float64)
         old_point = vtkPointToNumpyArray(points.GetPoint(0))
-
-        raster_strip = []
+        raster = PoseArray()
 
         for i in range(1, points.GetNumberOfPoints()):
             point = vtkPointToNumpyArray(points.GetPoint(i))
@@ -203,29 +224,21 @@ class TubularToolpathServer:
                 point_id = point_locator.FindClosestPoint(point)
                 normal = mesh_segment_normals.GetTuple(point_id)
 
-                vx_norm, vy_norm, vz_norm = self.computeDirectionVectors1(point, old_point, normal)
+                rotation_matrix = self.createRotationMatrix(point, old_point, normal)
+                raster.poses.append(self.createPose(old_point, rotation_matrix))
 
-                if self.debug: self.debug_poses.addPose(old_point, vx_norm, vy_norm, vz_norm)
-                # self.appendPose(point, vx_norm, vy_norm, vz_norm)
-                pose = (point, vx_norm, vy_norm, vz_norm)
-                raster_strip.append(pose)
-
-                self.pose_array1.poses.append(convertToPose(point, vx_norm, vy_norm, vz_norm))
+                if self.debug: self.debug_poses.addPose(old_point, rotation_matrix)
 
                 old_point = copy.deepcopy(point)
 
         last_point = vtkPointToNumpyArray(points.GetPoint(points.GetNumberOfPoints() - 1))
-        if self.debug: self.debug_poses.addPose(last_point, vx_norm, vy_norm, vz_norm)
-        self.pose_array1.poses.append(convertToPose(point, vx_norm, vy_norm, vz_norm))
-        pose = (point, vx_norm, vy_norm, vz_norm)
-        raster_strip.append(pose)
 
-        raster_strip.reverse() if toolpath_direction == "left" else None
-        for pose in raster_strip:
-            self.appendPose(pose[0], pose[1], pose[2], pose[3])
+        if self.debug: self.debug_poses.addPose(last_point, rotation_matrix)
+        raster.poses.append(self.createPose(last_point, rotation_matrix))
 
+        raster.poses.reverse() if toolpath_direction == "left" else None
 
-
+        return raster
 
     def createToolpath(self, center_line_points, mesh_segments, clipped_mesh):
         toolpath_direction = "right"
@@ -238,6 +251,9 @@ class TubularToolpathServer:
 
         #fix for rotation direction, cause centerline is randomly created from left to righ or from right to left
         rotation_direction = 1 if center_line_points[0][0] > center[0] else -1
+
+        raster_degrees = []
+        raster_array = []
 
         for r in range(self.rot_begin, self.rot_end, self.rot_step):
 
@@ -266,11 +282,15 @@ class TubularToolpathServer:
 
             saveVtp(os.path.join(DATA_PATH, ('debug/combined_rotation_segment/combined_rotation_segment_degree_' + str(r) + '.vtp')), combined_rotation_segment)
 
-            self.createRotationSegmentPoseArray(combined_rotation_segment, clipped_mesh, toolpath_direction)
+            raster = self.createRotationSegmentRaster(combined_rotation_segment, clipped_mesh, toolpath_direction)
+            raster_degrees.append(r)
+            raster_array.append(raster)
 
             toolpath_direction = "right" if toolpath_direction == "left" else "left"
 
             gap_filter = None
+
+        return raster_array, raster_degrees
 
     def computeCenterline(self, input_mesh_path, output_centerline_path):
         script_path = os.path.normpath( os.path.join(os.path.dirname(__file__), 'conda/toolpath_centerline.bash'))
@@ -278,24 +298,30 @@ class TubularToolpathServer:
         rc = subprocess.call(execute_string, shell=True)
 
     def run(self, ply_path):
-        # fill gaps and create mesh with open3d
-        print("tube ply path" + ply_path)
-        rospy.loginfo('Loading pointcload and closing gaps.')
-        watertight_stl_path = os.path.join(DATA_PATH, 'tmp/watertight_coil.stl')
-        cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01, self.voxel_down_sample_size, False) #self.debug)
-
-        # smooth mesh
-        watertight_mesh = loadStl(watertight_stl_path) 
-        smoothed_mesh = smoothMesh(watertight_mesh, 100)
-
-        # clip mesh
-        clipped_mesh = clipMeshAtZaxis(smoothed_mesh, self.z_clip_height)
-        clipped_vtp_path = os.path.join(DATA_PATH, 'tmp/clipped_coil.vtp')
-        saveVtp(clipped_vtp_path, clipped_mesh)
-        
-        # compute centerline
+        attempt = 0
         centerline_points = []
-        while len(centerline_points) < 5:
+
+        while len(centerline_points) < self.centerline_minimal_point_size_treshold :
+            # fill gaps and create mesh with open3d
+            rospy.loginfo('Loading pointcload and closing gaps.')
+            watertight_stl_path = os.path.join(DATA_PATH, 'tmp/watertight_coil.stl')
+            cropAndFillGapsInMesh(ply_path, watertight_stl_path, 0.01, self.voxel_down_sample_size, False) # self.debug)
+
+            # smooth mesh
+            watertight_mesh = loadStl(watertight_stl_path) 
+            smoothed_mesh = smoothMesh(watertight_mesh, 100)
+
+            cleaner = vtk.vtkCleanPolyData()
+            cleaner.SetInputData(smoothed_mesh)
+            cleaner.Update()
+            smoothed_clean_mesh = cleaner.GetOutput()
+
+            # clip mesh
+            clipped_mesh = clipMeshAtZaxis(smoothed_clean_mesh, self.z_clip_height)
+            clipped_vtp_path = os.path.join(DATA_PATH, 'tmp/clipped_coil.vtp')
+            saveVtp(clipped_vtp_path, clipped_mesh)
+            
+            # compute centerline
             centerline_path = os.path.join(DATA_PATH, 'tmp/centerline.vtp')
             self.computeCenterline(clipped_vtp_path, centerline_path)
             centerline_source = loadVtp(centerline_path)
@@ -303,22 +329,26 @@ class TubularToolpathServer:
             # centerline_points = (pv.wrap(centerline)).points #delete pv
             centerline_points = vtkPointsToNumpyArrayList(centerline.GetPoints())
             
-            if len(centerline_points) < 5:
-                rospy.loginfo('Number of centerline points %i to small retrying', len(centerline_points))       
+            if len(centerline_points) < self.centerline_minimal_point_size_treshold:
+                rospy.loginfo('Number of centerline points %i to small retrying!', len(centerline_points))
+                attempt = attempt + 1     
             else:
                 rospy.loginfo('Number of centerline points: %i', len(centerline_points))       
-            
+
+            if attempt > 10:
+                rospy.logerr('Computing centerline failed after ten attempts!')
+                return       
+
         if centerline_points[0][0] < centerline_points[0][1]: centerline_points.reverse()
 
         #split mesh in segments
         mesh_segments = self.splitMeshInSegments(centerline_points, clipped_mesh)
 
         #create toolpath poses
-        self.createToolpath(centerline_points, mesh_segments, clipped_mesh)
+        raster_array, raster_degrees = self.createToolpath(centerline_points, mesh_segments, clipped_mesh)
 
         if self.debug:
             self.debug_poses.saveVtp(DATA_PATH)
-
             idx = 0
             for segment in mesh_segments:
                 saveVtp(os.path.join(DATA_PATH , ('debug/mesh_segments/mesh_segment' + str(idx) + '.vtp')), segment)
@@ -328,24 +358,21 @@ class TubularToolpathServer:
         self.publisher.publish(marker_array)
 
         rospy.loginfo('Created toolpath')
+        return raster_array, raster_degrees
 
     def handle_request(self, req):
-        self.run(req.mesh_path)
         response = GenerateTubularToolpathResponse()
-        response_array = Float64MultiArray()
-        response_array.data = self.pose_array
-        self.pose_array = []
+        raster_array, raster_degrees = self.run(req.mesh_path)
 
-        response.toolpath_raster.append(self.pose_array1)
+        response.raster_degrees.data = raster_degrees
+        response.raster_array = raster_array
 
-        response.toolpath_vector_array = response_array
+        
+        # response_array = Float64MultiArray()
+        # response_array.data = self.pose_array
+        # self.pose_array = []
+
+        # response.toolpath_raster.append(self.pose_array1)
+
+        # response.toolpath_vector_array = response_array
         return response
-
-
-# server = TubularToolpathServer()
-# ply_path = os.path.join(DATA_PATH, 'original/coil_scan.ply')
-# server.run(ply_path)
-# # server.debug_line.render()
-
-# server.debug_line.save('debug_test')
-#https://wiki.ogre3d.org/Quaternion+and+Rotation+Primer

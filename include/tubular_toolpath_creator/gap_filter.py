@@ -72,12 +72,25 @@ class GapFilter:
         #initial segment
         if self.is_initial_element:
             #check which point is lower on z axis
-            if p1[2] < p2[2]:
-                self.old_end_pt = p2
-                self.old_end_id = p2_id
-            else:
-                self.old_end_pt = p1
-                self.old_end_id = p1_id
+            # if p1[2] < p2[2]:
+            #     self.old_end_pt = p2
+            #     self.old_end_id = p2_id
+            # else:
+            #     rotation_segement = self.reorderPolyline(p2_id, rotation_segement)
+
+            #     self.old_end_pt = p1
+            #     self.old_end_id = p1_id
+
+
+            if p1[2] > p2[2]:
+                rotation_segement = self.reorderPolyline(p2_id, rotation_segement)
+
+
+            self.old_end_pt = p2
+            self.old_end_id = p2_id
+
+
+
             self.old_rotation_segement = rotation_segement
             self.is_initial_element = False
             return
@@ -130,6 +143,7 @@ class GapFilter:
             self.old_rotation_segement = None
 
         self.pre_combined_rotation_segment.Update()
+
         # decimateFilter2 = vtk.vtkDecimatePolylineFilter()
         # decimateFilter2.SetTargetReduction(0.0)
         # decimateFilter2.SetInputData(self.pre_combined_rotation_segment.GetOutput())

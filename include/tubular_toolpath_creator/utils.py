@@ -9,6 +9,12 @@ import rospy
 from visualization_msgs.msg import MarkerArray, Marker
 from geometry_msgs.msg import Point, Pose, PoseArray
 
+import transforms3d
+from pytransform3d import rotations as pr
+
+import tf.transformations as tr
+
+
 def vtkPointsToNumpyArrayList(vtkpoints):
     points = []
     for i in range(vtkpoints.GetNumberOfPoints()):
@@ -125,32 +131,20 @@ def lookAt(eye, target):
     tz = -np.dot( mz, eye )   
     return np.array([mx[0], my[0], mz[0], 0, mx[1], my[1], mz[1], 0, mx[2], my[2], mz[2], 0, tx, ty, tz, 1])
 
-def orthogonalizeMatrix(A):
-    r = (np.transpose(A) - A) / (1 + np.trace(A))
-    cay_inner = np.identity(3) + r
-    return np.linalg.inv(cay_inner) * cay_inner
-
-def directionVectorsToQuaternion(vx, vy, vz):
-    rotation_matrix = np.array([vx, vy, vz])
-    r = Rotation.from_matrix(rotation_matrix)
-    return r.as_quat()
-
 def convertToPose(point, vx, vy, vz):
-    qx, qy, qz, qw = directionVectorsToQuaternion(vx, vy, vz)
+    R = np.asarray(np.column_stack((vx, vy, vz)), dtype=np.float64)
+    R = np.pad(R, ((0,1),(0,1)))
+    R[3,3] = 1
+    q = tr.quaternion_from_matrix(R)
     pose = Pose()
     pose.position.x = point[0]
     pose.position.y = point[1]
     pose.position.z = point[2]
-    pose.orientation.x = qx
-    pose.orientation.y = qy
-    pose.orientation.z = qz
-    pose.orientation.w = qw
+    pose.orientation.w = q[3]
+    pose.orientation.x = q[0]
+    pose.orientation.y = q[1]
+    pose.orientation.z = q[2]
     return pose
-
-# def directionVectorsToQuaternion(vx, vy, vz):
-#     m = np.array([vx, vy, vz])
-#     quat = tf.transformations.quaternion_from_matrix(m)
-#     return quat
 
 def rotatePointAroundAxis(p, axis, theta):
     theta = math.radians(theta)
