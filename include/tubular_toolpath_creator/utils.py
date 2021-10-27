@@ -160,15 +160,15 @@ def euclideanDistancePose(p1, p2):
 
 def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sample_size = 0.01, debug=False):
     pcd = o3d.io.read_point_cloud(input_path)
-    crop_bounding_box = o3d.geometry.AxisAlignedBoundingBox([0,0, z_crop_height], [9999,9999,9999])
-    cropped_pcd = pcd.crop(crop_bounding_box)
-    if debug: o3d.visualization.draw_geometries([cropped_pcd])
-
-    down_pcd = cropped_pcd.voxel_down_sample(voxel_down_sample_size) 
+    # crop_bounding_box = o3d.geometry.AxisAlignedBoundingBox([0,0, z_crop_height], [9999,9999,9999])
+    # cropped_pcd = pcd.crop(crop_bounding_box)
+    # if debug: o3d.visualization.draw_geometries([cropped_pcd])
+    
+    down_pcd = pcd.voxel_down_sample(voxel_down_sample_size) 
     if debug: o3d.visualization.draw_geometries([down_pcd])
     
     down_pcd.normals = o3d.utility.Vector3dVector(np.zeros(
-        (1, 3)))  # invalidate existing normals
+        (1, 3)))  
     down_pcd.estimate_normals()
     down_pcd.orient_normals_consistent_tangent_plane(100)
     if debug: o3d.visualization.draw_geometries([down_pcd], point_show_normal=True)
@@ -178,16 +178,17 @@ def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sam
                 mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(down_pcd, depth=7) #higher depth -> higher detail
     if debug: o3d.visualization.draw_geometries([mesh])
 
-    densities = np.asarray(densities)
-    density_colors = plt.get_cmap('plasma')(
-        (densities - densities.min()) / (densities.max() - densities.min()))
-    density_colors = density_colors[:, :3]
-    density_mesh = o3d.geometry.TriangleMesh()
-    density_mesh.vertices = mesh.vertices
-    density_mesh.triangles = mesh.triangles
-    density_mesh.triangle_normals = mesh.triangle_normals
-    density_mesh.vertex_colors = o3d.utility.Vector3dVector(density_colors)
-    if debug:  o3d.visualization.draw_geometries([density_mesh])
+    if debug:
+        densities = np.asarray(densities)
+        density_colors = plt.get_cmap('plasma')(
+            (densities - densities.min()) / (densities.max() - densities.min()))
+        density_colors = density_colors[:, :3]
+        density_mesh = o3d.geometry.TriangleMesh()
+        density_mesh.vertices = mesh.vertices
+        density_mesh.triangles = mesh.triangles
+        density_mesh.triangle_normals = mesh.triangle_normals
+        density_mesh.vertex_colors = o3d.utility.Vector3dVector(density_colors)
+        o3d.visualization.draw_geometries([density_mesh])
 
     mesh = o3d.geometry.TriangleMesh.compute_triangle_normals(mesh)
     if debug: o3d.visualization.draw_geometries([mesh])
@@ -227,7 +228,7 @@ def renderVtkPolydata(polydata):
     renderWindow.SetWindowName('ReadPolyData')
     renderWindowInteractor.Start()
 
-def convertPoseArrayToAxisMarkers(pose_arrays, 
+def convertRasterArrayToAxisMarkers(raster_array, 
                         namespace = 'debug_poses', 
                         frame_id = 'world', 
                         offset = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
@@ -247,7 +248,7 @@ def convertPoseArrayToAxisMarkers(pose_arrays,
     y_direction = [0, 1, 0]
     z_direction = [0, 0, 1]
 
-    for pose_array in pose_arrays:
+    for pose_array in raster_array:
         for pose in pose_array.poses:
 
             p1, p2 = _create_axis_points(pose, x_direction, axis_length)
@@ -282,63 +283,6 @@ def convertPoseArrayToAxisMarkers(pose_arrays,
             z_axis_marker.pose.orientation.y = 0.0
             z_axis_marker.pose.orientation.z = 0.0
             z_axis_marker.pose.orientation.w = 1.0
-
-    marker_array.markers.append(x_axis_marker)
-    marker_array.markers.append(y_axis_marker)
-    marker_array.markers.append(z_axis_marker)
-
-    id = 0
-    for marker in marker_array.markers:
-        marker.id = id
-        id += 1
-
-    return marker_array
-
-def convertDirectionVectorPoseToAxisMarkers(pose_array, 
-                        namespace = 'debug_poses', 
-                        frame_id = 'tsdf_origin', 
-                        offset = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
-                        axis_scale = 0.001, 
-                        axis_length = 0.01):
-    
-    marker_array = MarkerArray()
-    red = [1.0, 0.0, 0.0, 1.0]
-    green = [0.0, 1.0, 0.0, 1.0]
-    blue = [0.0, 0.0, 1.0, 1.0]
-
-    x_axis_marker = _create_line_marker(red, frame_id, namespace, axis_scale)
-    y_axis_marker = _create_line_marker(green, frame_id, namespace, axis_scale)
-    z_axis_marker = _create_line_marker(blue, frame_id, namespace, axis_scale)
-
-    for i in range(len(pose_array)//12):
-        p = Point()
-        vx = Point()
-        vy = Point()
-        vz = Point()
-
-        idx = i * 12
-
-        p.x = pose_array[idx+0]
-        p.y = pose_array[idx+1]
-        p.z = pose_array[idx+2]
-        vx.x = (pose_array[idx+3] * axis_length) + p.x
-        vx.y = (pose_array[idx+4] * axis_length) + p.y
-        vx.z = (pose_array[idx+5] * axis_length) + p.z
-        vy.x = (pose_array[idx+6] * axis_length) + p.x
-        vy.y = (pose_array[idx+7] * axis_length) + p.y
-        vy.z = (pose_array[idx+8] * axis_length) + p.z
-        vz.x = (pose_array[idx+9] * axis_length) + p.x
-        vz.y = (pose_array[idx+10] * axis_length) + p.y
-        vz.z = (pose_array[idx+11] * axis_length) + p.z
-
-        x_axis_marker.points.append(p)
-        x_axis_marker.points.append(vx)
-
-        y_axis_marker.points.append(p)
-        y_axis_marker.points.append(vy)
-
-        z_axis_marker.points.append(p)
-        z_axis_marker.points.append(vz)
 
     marker_array.markers.append(x_axis_marker)
     marker_array.markers.append(y_axis_marker)

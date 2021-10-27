@@ -1,19 +1,34 @@
 <?xml version="1.0"?>
 <launch>
+  <arg name="debug" default="True" />
+  <!-- <arg name="mesh_path" default="$(fi
+  nd tubular_toolpath_creator)/data/original/coil_scan00.ply" /> -->
+  <!-- <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/results_mesh.ply" /> -->
+  <arg name="mesh_path" default="" />
+
+
+
   <node name="tubular_toolpath_creator" pkg="tubular_toolpath_creator" type="tubular_toolpath_node.py" output="screen">
     <rosparam >
-      rotation_begin: 70
-      rotation_end: 131
+      rotation_begin: 90
+      rotation_end: 210
       rotation_step: 30
-      z_clip_height: 0.08
+      lower_rotation_end: 120
+      lower_rotation_hight: 0.14
+      upper_spray_anlge: 45
+      z_clip_height: 0.072
       voxel_down_sample_size: 0.005
       centerline_target_reduction: 0.8
-      centerline_minimal_point_size_treshold: 45
+      centerline_minimal_point_size_treshold: 30
       toolpath_segment_point_reduction: 0.01
-      smoothing_mesh_factor: 5000.0
+      smoothing_mesh_factor: 100
       pose_spacing: 0.01
       frame_id: tsdf_origin
-      debug: True
     </rosparam>
+
+    <param name="debug" value="$(arg debug)"/>
+    <param name="mesh_path" value="$(arg mesh_path)"/>
+
   </node>
 </launch>
+
