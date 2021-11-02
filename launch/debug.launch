@@ -1,11 +1,12 @@
 <?xml version="1.0"?>
 <launch>
   <arg name="debug" default="True" />
-  <arg name="mesh_path" default="" />
+  <!-- <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/coil_scan00.ply" /> -->
+  <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/results_mesh.ply" />
 
   <node name="tubular_toolpath_creator" pkg="tubular_toolpath_creator" type="tubular_toolpath_node.py" output="screen">
     <rosparam >
-      rotation_begin: 0
+      rotation_begin: 121
       rotation_end: 250
       rotation_step: 30
       lower_rotation_end: 120

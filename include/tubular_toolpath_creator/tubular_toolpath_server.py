@@ -158,22 +158,7 @@ class TubularToolpathServer:
 
         return R
 
-    def createRotationMatrixSurfaceNormalCenterLinePerpendicular(self, center_line_direction, center):
-        center[2] = 0
-        center = - normalize(center)
-        rot_axis = [-center[0], center[1], 0]
-
-        vz_norm = normalize(rotatePointAroundAxis(center, rot_axis, - self.upper_spray_anlge))
-        vy_norm = normalize(np.cross(center_line_direction, vz_norm))
-        vx_norm = - normalize(np.cross(vz_norm, vy_norm))
-
-        R = np.asarray(np.column_stack((vx_norm, vy_norm, vz_norm)), dtype=np.float64)
-        R = np.pad(R, ((0,1),(0,1)))
-        R[3,3] = 1
-
-        return R
-
-    def createRotationMatrixUprightNormal(self, point, old_point, normal):
+    def createRotationMatrixUprightNormal(self, normal):
         vy_norm = np.asarray([0.0, 0.0, 1.0], dtype=np.float64)
         vx_norm = normalize(np.cross(vy_norm, normal))
         vz_norm = - normalize(np.cross(vy_norm, vx_norm))
@@ -181,6 +166,21 @@ class TubularToolpathServer:
         R = np.asarray(np.column_stack((vx_norm, vy_norm, vz_norm)), dtype=np.float64)
         R = np.pad(R, ((0,1),(0,1)))
         R[3,3] = 1
+        return R
+
+    def createRotationMatrixAngledCenterLinePerpendicular(self, center_line_direction, center, angle):
+        center[2] = 0
+        center = - normalize(center)
+        rot_axis = [-center[0], center[1], 0]
+
+        vz_norm = normalize(rotatePointAroundAxis(center, rot_axis, -angle))
+        vy_norm = normalize(np.cross(center_line_direction, vz_norm))
+        vx_norm = - normalize(np.cross(vz_norm, vy_norm))
+
+        R = np.asarray(np.column_stack((vx_norm, vy_norm, vz_norm)), dtype=np.float64)
+        R = np.pad(R, ((0,1),(0,1)))
+        R[3,3] = 1
+
         return R
 
     def createRotationMatrixUprightCenterLinePerpendicular(self, center):
@@ -223,8 +223,6 @@ class TubularToolpathServer:
         point_locator.SetNumberOfPointsPerBucket(2)
         point_locator.BuildLocator
 
-
-
         rotation_matrix = np.asarray((4,4), dtype=np.float64)
         old_point = vtkPointToNumpyArray(points.GetPoint(0))
         raster = PoseArray()
@@ -239,28 +237,21 @@ class TubularToolpathServer:
 
                 point_height = point[2]
 
-                if( rotation_degree     <= self.lower_rotation_end): #and
-                    # point_height        <= self.lower_rotation_height):
-                    # rotation_matrix = self.createRotationMatrixUprightNormal(point, old_point, normal)
-                    rotation_matrix = self.createRotationMatrixUprightCenterLinePerpendicular(center)
+                if(rotation_degree <= self.lower_rotation_end):
+                   rotation_matrix  = self.createRotationMatrixUprightCenterLinePerpendicular(center)
 
-                elif( rotation_degree   >= self.lower_rotation_end and
-                    point_height        <= self.lower_rotation_height):
+                elif(rotation_degree >= self.lower_rotation_end and
+                     point_height    <= self.lower_rotation_height):
                     continue
 
                 else:
-                    rotation_matrix = self.createRotationMatrixSurfaceNormalCenterLinePerpendicular(center_line_direction, center)
-                    # rotation_matrix = self.createRotationMatrix(point, old_point, normal)
+                    rotation_matrix = self.createRotationMatrixAngledCenterLinePerpendicular(center_line_direction, center, self.upper_spray_anlge)
 
                 raster.poses.append(self.createPose(point, rotation_matrix))
 
                 if self.debug: self.debug_poses.addPose(point, rotation_matrix)
 
                 old_point = copy.deepcopy(point)
-
-        # last_point = vtkPointToNumpyArray(points.GetPoint(points.GetNumberOfPoints() - 1))
-        # if self.debug: self.debug_poses.addPose(last_point, rotation_matrix)
-        # raster.poses.append(self.createPose(last_point, rotation_matrix))
 
         raster.poses.reverse() if toolpath_direction == "left" else None
 
@@ -332,7 +323,7 @@ class TubularToolpathServer:
             # fill gaps and create mesh with open3d
             rospy.loginfo('Loading pointcload and closing gaps.')
             watertight_stl_path = os.path.join(DATA_PATH, 'tmp/watertight_coil.stl')
-            cropAndFillGapsInMesh(ply_path, watertight_stl_path, self.z_clip_height, self.voxel_down_sample_size, False) #self.debug)
+            cropAndFillGapsInMesh(ply_path, watertight_stl_path, self.z_clip_height, self.voxel_down_sample_size, self.debug)
 
             # smooth mesh
             watertight_mesh = loadStl(watertight_stl_path) 
