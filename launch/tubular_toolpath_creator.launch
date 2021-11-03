@@ -9,8 +9,8 @@
       rotation_end: 250
       rotation_step: 30
       lower_rotation_end: 120
-      lower_rotation_hight: 0.14
-      upper_spray_anlge: 45
+      lower_rotation_height: 0.14
+      upper_spray_angle: 45
       z_clip_height: 0.072
       voxel_down_sample_size: 0.005
       centerline_target_reduction: 0.8
