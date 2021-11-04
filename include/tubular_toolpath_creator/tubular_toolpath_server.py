@@ -28,7 +28,7 @@ class TubularToolpathServer:
         self.rot_step = rospy.get_param('~rotation_step')
         self.lower_rotation_end = rospy.get_param('~lower_rotation_end')
         self.lower_rotation_height = rospy.get_param('~lower_rotation_hight')
-        self.upper_spray_anlge = rospy.get_param('~upper_spray_anlge')
+        self.upper_spray_angle = rospy.get_param('~upper_spray_angle')
         self.z_clip_height = rospy.get_param('~z_clip_height') 
         self.voxel_down_sample_size = rospy.get_param('~voxel_down_sample_size') 
         self.centerline_target_reduction = rospy.get_param('~centerline_target_reduction') 
@@ -245,7 +245,7 @@ class TubularToolpathServer:
                     continue
 
                 else:
-                    rotation_matrix = self.createRotationMatrixAngledCenterLinePerpendicular(center_line_direction, center, self.upper_spray_anlge)
+                    rotation_matrix = self.createRotationMatrixAngledCenterLinePerpendicular(center_line_direction, center, self.upper_spray_angle)
 
                 raster.poses.append(self.createPose(point, rotation_matrix))
 
