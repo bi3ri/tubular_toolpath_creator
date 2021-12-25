@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <launch>
-  <arg name="debug" default="True" />
-  <arg name="mesh_path" default="" />
+  <arg name="debug" default="False" />
+  <arg name="mesh_path" default="default" />
 
   <node name="tubular_toolpath_creator" pkg="tubular_toolpath_creator" type="tubular_toolpath_node.py" output="screen">
     <rosparam >
