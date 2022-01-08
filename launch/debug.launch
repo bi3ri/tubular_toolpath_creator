@@ -2,16 +2,18 @@
 <launch>
   <arg name="debug" default="True" />
   <!-- <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/coil_scan00.ply" /> -->
-  <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/results_mesh.ply" />
+  <!-- <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/results_mesh.ply" /> -->
+  <arg name="mesh_path" default="$(find hotspray_application)/data/meshs/results_mesh.ply" />
+
 
   <node name="tubular_toolpath_creator" pkg="tubular_toolpath_creator" type="tubular_toolpath_node.py" output="screen">
     <rosparam >
-      rotation_begin: 121
+      rotation_begin: 0
       rotation_end: 250
       rotation_step: 30
       lower_rotation_end: 120
-      lower_rotation_hight: 0.14
-      upper_spray_anlge: 45
+      lower_rotation_height: 0.14
+      upper_spray_angle: 45
       z_clip_height: 0.072
       voxel_down_sample_size: 0.005
       centerline_target_reduction: 0.8

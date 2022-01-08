@@ -1,13 +1,16 @@
 #!/usr/bin/env python
+# from cmath import sqrt
 import vtk
-import math
+# import math
 import numpy as np
 import open3d as o3d
 import matplotlib.pyplot as plt #fuer density
 from scipy.spatial.transform import Rotation
 import rospy
+import pyvista as pv
 from visualization_msgs.msg import MarkerArray, Marker
 from geometry_msgs.msg import Point, Pose, PoseArray
+from math import pi ,sin, cos, sqrt, radians
 
 import transforms3d
 from pytransform3d import rotations as pr
@@ -122,15 +125,6 @@ def lines_from_points(points):
 def normalize(v):
     return np.true_divide(v, np.linalg.norm(v))
 
-def lookAt(eye, target):
-    mz = normalize( (eye[0]-target[0], eye[1]-target[1], eye[2]-target[2]) ) # inverse line of sight
-    mx = normalize( np.cross( [0,0,1], mz ) )
-    my = normalize( np.cross( mz, mx ) )
-    tx =  np.dot( mx, eye )
-    ty =  np.dot( my, eye )
-    tz = -np.dot( mz, eye )   
-    return np.array([mx[0], my[0], mz[0], 0, mx[1], my[1], mz[1], 0, mx[2], my[2], mz[2], 0, tx, ty, tz, 1])
-
 def convertToPose(point, vx, vy, vz):
     R = np.asarray(np.column_stack((vx, vy, vz)), dtype=np.float64)
     R = np.pad(R, ((0,1),(0,1)))
@@ -147,16 +141,38 @@ def convertToPose(point, vx, vy, vz):
     return pose
 
 def rotatePointAroundAxis(p, axis, theta):
-    theta = math.radians(theta)
+    theta = radians(theta)
     axis = axis / np.linalg.norm(axis)  # normalize the rotation vector first
     rot = Rotation.from_rotvec(theta * axis)
     return rot.apply(p)
+
+def rotatePointAroundTranslatedAxis(o, d, p, theta):
+    """
+    o: origin
+    d: direction_vector
+    theta: rotation degree
+    """
+    d = normalize(d)
+    theta = radians(theta)
+    a, b, c = o[0], o[1], o[2]
+    u, v, w = d[0], d[1], d[2]
+    x, y, z = p[0], p[1], p[2]
+    u2 = d[0] ** 2
+    v2 = d[1] ** 2
+    w2 = d[2] ** 2
+    cos_theta = cos(theta)
+    sinus_theta = sin(theta)
+    p = np.zeros(3)
+    p[0] = (a*(v2 + w2) - u*(b*v + c*w - u*x - v*y - w*z)) * (1 - cos_theta) + x*cos_theta + (-c*v + b*w - w*y + v*z) * sinus_theta
+    p[1] = (b*(u2 + w2) - v*(a*u + c*w - u*x - v*y - w*z)) * (1 - cos_theta) + y*cos_theta + (c*u - a*w + w*x - u*z) * sinus_theta
+    p[2] = (c*(u2 + v2) - w*(a*u + b*v - u*x - v*y - w*z)) * (1 - cos_theta) + z*cos_theta + (-b*u + a*v - v*x + u*y) * sinus_theta
+    return p
 
 def euclideanDistancePose(p1, p2):
     x_dis = p1[0] - p2[0]
     y_dis = p1[1] - p2[1]
     z_dis = p1[2] - p2[2]
-    return math.sqrt(x_dis**2 + y_dis**2 + z_dis**2)
+    return sqrt(x_dis**2 + y_dis**2 + z_dis**2)
 
 def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sample_size = 0.01, debug=False):
     pcd = o3d.io.read_point_cloud(input_path)
@@ -194,20 +210,14 @@ def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sam
     if debug: o3d.visualization.draw_geometries([mesh])
     o3d.io.write_triangle_mesh(output_path, mesh)
 
-
 def renderVtkPolydata(polydata):
     """Wrap the provided vtkPolyData object in a mapper and an actor, returning
     the actor."""
     mapper = vtk.vtkPolyDataMapper()
-    # if vtk.VTK_MAJOR_VERSION <= 5:
-    #     #mapper.SetInput(reader.GetOutput())
-    #     mapper.SetInput(polydata)
-    # else:
-    #     mapper.SetInputConnection(polydata.GetProducerPort())
+
     mapper.SetInputData(polydata)
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    #actor.GetProperty().SetRepresentationToWireframe()
     actor.GetProperty().SetColor(0.5, 0.5, 1.0)
 
     colors = vtk.vtkNamedColors()   
@@ -330,4 +340,7 @@ def _create_axis_points(pose, direction, axis_length):
     point2.z = float((point2_coordinates[2]* axis_length) + point1.z)
     
     return point1, point2
+
+
+
 

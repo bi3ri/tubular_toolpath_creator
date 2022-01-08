@@ -3,9 +3,10 @@ import rospy
 import os
 import subprocess
 import copy
+from timeit import default_timer as timer
 
 import pyvista as pv
-from spatialmath import *
+# from spatialmath import *
 
 import vtk
 import numpy as np
@@ -15,7 +16,7 @@ from geometry_msgs.msg import PoseArray, Pose
 from tubular_toolpath_creator.gap_filter import GapFilter
 from tubular_toolpath_creator.utils import *
 from tubular_toolpath_creator.srv import GenerateTubularToolpath, GenerateTubularToolpathResponse
-from tubular_toolpath_creator.debug_visualisation import DebugPoses
+from tubular_toolpath_creator.debug_visualisation import *
 
 DATA_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
 DEBUG = True
@@ -27,7 +28,7 @@ class TubularToolpathServer:
         self.rot_end = rospy.get_param('~rotation_end')
         self.rot_step = rospy.get_param('~rotation_step')
         self.lower_rotation_end = rospy.get_param('~lower_rotation_end')
-        self.lower_rotation_height = rospy.get_param('~lower_rotation_hight')
+        self.lower_rotation_height = rospy.get_param('~lower_rotation_height')
         self.upper_spray_angle = rospy.get_param('~upper_spray_angle')
         self.z_clip_height = rospy.get_param('~z_clip_height') 
         self.voxel_down_sample_size = rospy.get_param('~voxel_down_sample_size') 
@@ -42,7 +43,10 @@ class TubularToolpathServer:
         self.service = rospy.Service('tubular_toolpath_creator/create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
         self.publisher = rospy.Publisher('tubular_toolpath_raster', MarkerArray, queue_size=100)
 
-        self.debug_poses = DebugPoses('tubular_toolpath')
+        if self.debug:
+            self.debug_poses = DebugPoses('tubular_toolpath')
+            self.debug_rotation_points = DebugPoints()
+            self.debug_rotation_vector = DebugLines("roation_vecotr", scaling_factor=0.03)
 
     def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
@@ -109,11 +113,11 @@ class TubularToolpathServer:
         
         return clipped_coil_array
 
-    def createRotationSegment(self, coil_segment, cut_normal, rot_center, centerline_segment_middle, i, r):
+    def createRotationSegment(self, coil_segment, cut_normal, rotated_cut_direction, centerline_segment_middle, i, r):
         #cut front of tubular surface relative to rot_center in order to not cut surface twice
         clip = vtk.vtkClipPolyData()
         clip_plane = vtk.vtkPlane()
-        clip_plane.SetNormal(rot_center - centerline_segment_middle)
+        clip_plane.SetNormal(rotated_cut_direction - centerline_segment_middle)
         clip_plane.SetOrigin(centerline_segment_middle) 
         clip.SetInputData(coil_segment) 
         clip.SetClipFunction(clip_plane)
@@ -121,7 +125,7 @@ class TubularToolpathServer:
         
         cut_plane = vtk.vtkPlane()
         cut_plane.SetNormal(cut_normal)
-        cut_plane.SetOrigin(rot_center)
+        cut_plane.SetOrigin(rotated_cut_direction)
 
         cutter = vtk.vtkCutter()
         cutter.SetCutFunction(cut_plane)
@@ -134,6 +138,18 @@ class TubularToolpathServer:
         if self.debug:
             cipped_mesh_file_path = "debug/clipped_mesh_segments/clipped_mesh_rotation_{0:03d}_segment_{1:03d}.vtp".format(r, i)
             saveVtp(os.path.join(DATA_PATH , cipped_mesh_file_path), clip.GetOutput())
+
+            # if(i%2!=1):
+            if(i == 52):
+                self.debug_rotation_vector.addLine(centerline_segment_middle, rotated_cut_direction)
+
+                plane_path = os.path.join(DATA_PATH , "debug/cut_plane_{0:03d}_segment_{1:03d}.vtp".format(r, i))
+                plane_center = ((rotated_cut_direction - centerline_segment_middle) / 40 ) + centerline_segment_middle
+                plane = pv.Plane(plane_center, cut_normal, 0.02, 0.05)
+                # plane.rotate_z(45, true)
+                plane.save(plane_path)
+                saveVtp(os.path.join(os.path.join(DATA_PATH , "debug/cut_line_{0:03d}_segment_{1:03d}.vtp".format(r, i))), cutter.GetOutput())
+
 
         strip_one = vtk.vtkStripper()
         strip_one.SetInputData(cutter.GetOutput())
@@ -210,12 +226,12 @@ class TubularToolpathServer:
     def createRotationSegmentRaster(self, combined_rotation_segment, clipped_mesh, toolpath_direction, rotation_degree, center, center_line_direction):
         points = combined_rotation_segment.GetPoints()
 
-        normalGenerator = vtk.vtkPolyDataNormals()
-        normalGenerator.SetInputData(clipped_mesh)
-        normalGenerator.ComputePointNormalsOn()
-        normalGenerator.ComputeCellNormalsOff()
-        normalGenerator.Update()
-        mesh_segment_normals = normalGenerator.GetOutput().GetPointData().GetArray("Normals")
+        normal_generator = vtk.vtkPolyDataNormals()
+        normal_generator.SetInputData(clipped_mesh)
+        normal_generator.ComputePointNormalsOn()
+        normal_generator.ComputeCellNormalsOff()
+        normal_generator.Update()
+        mesh_segment_normals = normal_generator.GetOutput().GetPointData().GetArray("Normals")
 
         point_locator = vtk.vtkPointLocator()
         point_locator.SetDataSet(clipped_mesh)
@@ -261,11 +277,10 @@ class TubularToolpathServer:
         toolpath_direction = "right"
         center = self.findCenterOfCoil(center_line_points)
         center_line_size = len(center_line_points)
-
         center_line_direction = normalize(- center_line_points[0] + center_line_points[-1])
 
         #fix random centerline direction
-        rotation_direction = 1 if center_line_points[0][0] > center[0] else -1
+        rotation_direction = 1 if center_line_points[0][0] > center_line_points[center_line_size//2][0] else -1
 
         raster_degrees = []
         raster_array = []
@@ -274,38 +289,40 @@ class TubularToolpathServer:
 
             gap_filter = GapFilter(center_line_size)
 
-            for i in range(0, center_line_size - 1):
+            for i in range(0, center_line_size - 1): 
+
                 axis = center_line_points[i + 1] - center_line_points[i] 
 
-                #translate roation_center relative to coordinate origin, rotate and translate back
-                translation_center = center - center_line_points[i] 
-                rot_center = rotatePointAroundAxis(translation_center, axis, rotation_direction * r)
-                rot_center += center_line_points[i]
+                if i == 0 or i == center_line_size -1: middle = center_line_points[0]
+                else: middle = (center_line_points[i+1] - center_line_points[i])/2 + center_line_points[i]
 
-
-                if i == 0 or i == center_line_size -1:
-                    middle = center_line_points[0]
-                else:
-                    middle = (center_line_points[i+1] - center_line_points[i])/2 + center_line_points[i]
-
-                cut_normal = np.cross(center_line_points[i+1] - rot_center, center_line_points[i] - rot_center)
+                cut_direction = middle + normalize(np.cross(axis, center - middle))
+                rotated_cut_direction = rotatePointAroundTranslatedAxis(center_line_points[i], axis, cut_direction, rotation_direction * (r - 90))
+                cut_normal = np.cross(center_line_points[i+1] - rotated_cut_direction, center_line_points[i] - rotated_cut_direction)
 
                 #cut surface to create toolpath segment
-                rotation_segement = self.createRotationSegment(mesh_segments[i], cut_normal, rot_center, middle, i, r)
-
+                rotation_segement = self.createRotationSegment(mesh_segments[i], cut_normal, rotated_cut_direction, middle, i, r)
                 gap_filter.addSegment(rotation_segement)
 
-            # if self.debug:
+                if(i == 25): 
+                    saveDebugLine(center_line_points[i+1], center_line_points[i], os.path.join(DATA_PATH ,"debug/centerline_25.vtp"))
+                    # egal = rotated_cut_direction - middle
+                    # egal = [0, 0, 0.1]
+                    # rectangle = pv.geometric_objects.Rectangle([center_line_points[i-1], center_line_points[i+1], center_line_points[i-1] + egal, center_line_points[i+1]] + egal)
+                    # rectangle = pv.Line(center_line_points[i-1], center_line_points[i+1])
+                    # rectangle.plot(show_edges=True, line_width=5)
+                    # rectangle.save(os.path.join(DATA_PATH ,"debug/rectangle_" + str(r) + ".vtp"))
+
             combined_rotation_segment = gap_filter.getCombinedRotationSegement()
 
-            saveVtp(os.path.join(DATA_PATH, ('debug/combined_rotation_segment/combined_rotation_segment_degree_' + str(r) + '.vtp')), combined_rotation_segment)
+            if self.debug:
+                self.debug_rotation_vector.saveVtp(DATA_PATH)
 
             raster = self.createRotationSegmentRaster(combined_rotation_segment, clipped_mesh, toolpath_direction, r, center, center_line_direction)
             raster_degrees.append(r)
             raster_array.append(raster)
 
             toolpath_direction = "right" if toolpath_direction == "left" else "left"
-
             gap_filter = None
 
         return raster_array, raster_degrees
@@ -316,6 +333,7 @@ class TubularToolpathServer:
         rc = subprocess.call(execute_string, shell=True)
 
     def run(self, ply_path):
+        start_time = timer()
         attempt = 0
         centerline_points = []
 
@@ -375,14 +393,13 @@ class TubularToolpathServer:
             for segment in mesh_segments:
                 saveVtp(os.path.join(DATA_PATH , ('debug/mesh_segments/mesh_segment' + str(idx) + '.vtp')), segment)
                 idx+=1
-
                 even_segments.AddInputData(segment) if (idx%2 == 0) else uneven_segments.AddInputData(segment)
+            
             even_segments.Update()
             uneven_segments.Update()
             saveVtp(os.path.join(DATA_PATH , ('debug/mesh_segments/even_segments.vtp')), even_segments.GetOutput())
             saveVtp(os.path.join(DATA_PATH , ('debug/mesh_segments/uneven_segments.vtp')), uneven_segments.GetOutput())
 
-            
 
         marker_array = convertRasterArrayToAxisMarkers(raster_array, namespace="raster_array", frame_id=self.frame_id)
         self.publisher.publish(marker_array)
@@ -391,7 +408,9 @@ class TubularToolpathServer:
         for pose_array in raster_array:
             number_of_poses += len(pose_array.poses)
         
+        elapsed_time = timer() - start_time
         rospy.loginfo('Successfully createded toolpath with %i rasters and %i poses!', len(raster_array), number_of_poses)
+        rospy.loginfo('Computation of toolpath took %i seconds', elapsed_time)
         return raster_array, raster_degrees
 
     def handle_request(self, req):

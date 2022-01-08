@@ -1,12 +1,14 @@
 import vtk
 import os
+import pyvista as pv
+from tubular_toolpath_creator.utils import *
 
 DATA_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
 
 
 class DebugLines:
 
-    def __init__(self, name):
+    def __init__(self, name, scaling_factor=1.0):
         self.points = vtk.vtkPoints()
         self.cells = vtk.vtkCellArray()
         self.polydata = vtk.vtkPolyData()
@@ -14,11 +16,18 @@ class DebugLines:
         self.polydata_array = []
         self.actors = []
         self.name = name
+        self.scaling_factor = scaling_factor
 
+    def addLine(self, start_point, end_point):
+        if self.scaling_factor != 1.0:
+            v = end_point - start_point
+            v = normalize(v) * self.scaling_factor
+            
+            end_point = start_point + v
 
-    def addLine(self, p1, p2, color='Black'):
-        self.points.InsertNextPoint(p1)
-        self.points.InsertNextPoint(p2)
+        self.points.InsertNextPoint(start_point)
+        self.points.InsertNextPoint(end_point)
+
 
     def setLines(self):
         number_of_points = self.points.GetNumberOfPoints()
@@ -94,13 +103,63 @@ class DebugPoses:
         self.debug_y.saveVtp(path)
         self.debug_z.saveVtp(path)
 
-# self.polydata_array.append(polydata)
+class DebugPoints:
+    def __init__(self):
+        self.points = vtk.vtkPoints()
 
-# mapper = vtk.vtkPolyDataMapper()
-# mapper.SetInputData(polydata)
+    def addPoint(self, p):
+        self.points.InsertNextPoint(p)
 
-# actor = vtk.vtkActor()
-# actor.SetMapper(mapper)
-# actor.GetProperty().SetColor(self.colors.GetColor3d(color))
+    def save(self, path):
+        polydata = vtk.vtkPolyData()
+        polydata.SetPoints(self.points)
 
-# self.actors.append(actor)
+        writer = vtk.vtkXMLPolyDataWriter()
+        writer.SetFileName(path)
+        writer.SetInputData(polydata)
+        writer.Write()
+    
+def saveDebugLine(p1, p2, path):
+    points = vtk.vtkPoints()
+    points.InsertNextPoint(p1)
+    points.InsertNextPoint(p2)
+
+    line = vtk.vtkLine()
+    line.GetPointIds().SetNumberOfIds(2)
+    line.GetPointIds().SetId(0, 0) 
+    line.GetPointIds().SetId(1, 1) 
+
+    cell = vtk.vtkCellArray()
+    cell.InsertNextCell(line)
+
+    polydata = vtk.vtkPolyData()
+    polydata.SetPoints(points)
+    polydata.SetLines(cell)
+
+    writer = vtk.vtkXMLPolyDataWriter()
+    writer.SetFileName(path)
+    writer.SetInputData(polydata)
+    writer.Write()
+
+    
+# def saveDebugPlane(origin, normal, path):
+#     plane = vtk.vtkPlane()
+#     plane.SetOrigin(origin)
+#     plane.SetNormal(normal)
+#     arrowSource = vtkArrowSource()
+#     cell = vtk.vtkCellArray()
+#     cell.InsertNextCell(plane)
+
+#     polydata = vtk.vtkPolyData()
+#     # polydata.SetPoints(points)
+#     polydata.InsertNextCell(cell)
+
+#     writer = vtk.vtkXMLPolyDataWriter()
+#     writer.SetFileName(path)
+#     writer.SetInputData(polydata)
+#     writer.Write()
+
+def saveDebugPlane(origin, normal, path):
+    pv.Plane(origin, normal).save(path)
+
+saveDebugPlane([0,0,1], [1,0,0], "test.vtk")

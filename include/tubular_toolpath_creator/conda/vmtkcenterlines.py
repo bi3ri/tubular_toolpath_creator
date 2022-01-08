@@ -666,6 +666,14 @@ class vmtkCenterlines(pypes.pypeScript):
 
         self.Centerlines = centerlineFilter.GetOutput()
         self.VoronoiDiagram = centerlineFilter.GetVoronoiDiagram()
+
+        writer = vtk.vtkXMLPolyDataWriter()
+        writer.SetFileName("/home/bi3ri/hotspray_ws/src/tubular_toolpath_creator/data/debug/voronoi.vtp")
+        # writer.vtkSetFilePathMacro(path)
+        writer.SetInputData(self.VoronoiDiagram)
+        # writer.Update()
+        writer.Write()
+
         self.DelaunayTessellation = centerlineFilter.GetDelaunayTessellation()
         self.PoleIds = centerlineFilter.GetPoleIds()
 
