@@ -19,7 +19,6 @@ from tubular_toolpath_creator.srv import GenerateTubularToolpath, GenerateTubula
 from tubular_toolpath_creator.debug_visualisation import *
 
 DATA_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
-DEBUG = True
 
 class TubularToolpathServer:
 
@@ -39,6 +38,7 @@ class TubularToolpathServer:
         self.pose_spacing = rospy.get_param('~pose_spacing')
         self.frame_id = rospy.get_param('~frame_id')
         self.debug = rospy.get_param('~debug')
+
 
         self.service = rospy.Service('tubular_toolpath_creator/create_tubular_toolpath', GenerateTubularToolpath, self.handle_request)
         self.publisher = rospy.Publisher('tubular_toolpath_raster', MarkerArray, queue_size=100)
