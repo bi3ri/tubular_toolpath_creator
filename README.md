@@ -34,7 +34,7 @@ create -n vmtk -c vmtk python=3.5 itk vtk vmtk
 
 
 ## Run
-The Tubular-toolpath-creator can be used by starting the launch file with a defined mesh path. If the mesh_path is left empth a node with a service is started. 
+The Tubular-toolpath-creator can be used by starting the launch file with a defined mesh path. If the mesh_path is left empty a node with a service is started. 
 
 ```shell
 # Start the toolpath_creator_node
