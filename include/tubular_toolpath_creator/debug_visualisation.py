@@ -5,7 +5,6 @@ from tubular_toolpath_creator.utils import *
 
 DATA_PATH = os.path.normpath(os.path.join(os.path.dirname(__file__), '../../data')) 
 
-
 class DebugLines:
 
     def __init__(self, name, scaling_factor=1.0):
@@ -141,25 +140,6 @@ def saveDebugLine(p1, p2, path):
     writer.SetInputData(polydata)
     writer.Write()
 
-    
-# def saveDebugPlane(origin, normal, path):
-#     plane = vtk.vtkPlane()
-#     plane.SetOrigin(origin)
-#     plane.SetNormal(normal)
-#     arrowSource = vtkArrowSource()
-#     cell = vtk.vtkCellArray()
-#     cell.InsertNextCell(plane)
-
-#     polydata = vtk.vtkPolyData()
-#     # polydata.SetPoints(points)
-#     polydata.InsertNextCell(cell)
-
-#     writer = vtk.vtkXMLPolyDataWriter()
-#     writer.SetFileName(path)
-#     writer.SetInputData(polydata)
-#     writer.Write()
 
 def saveDebugPlane(origin, normal, path):
     pv.Plane(origin, normal).save(path)
-
-saveDebugPlane([0,0,1], [1,0,0], "test.vtk")

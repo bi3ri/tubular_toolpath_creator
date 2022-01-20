@@ -5,7 +5,6 @@
   <!-- <arg name="mesh_path" default="$(find tubular_toolpath_creator)/data/original/results_mesh.ply" /> -->
   <arg name="mesh_path" default="$(find hotspray_application)/data/meshs/results_mesh.ply" />
 
-
   <node name="tubular_toolpath_creator" pkg="tubular_toolpath_creator" type="tubular_toolpath_node.py" output="screen">
     <rosparam >
       rotation_begin: 0
@@ -29,4 +28,3 @@
 
   </node>
 </launch>
-

@@ -46,7 +46,7 @@ class TubularToolpathServer:
         if self.debug:
             self.debug_poses = DebugPoses('tubular_toolpath')
             self.debug_rotation_points = DebugPoints()
-            self.debug_rotation_vector = DebugLines("roation_vecotr", scaling_factor=0.03)
+            self.debug_rotation_vector = DebugLines("rotation_vector", scaling_factor=0.03)
 
     def findCenterOfCoil(self, center_line_points):
         center = np.mean(center_line_points, axis=0)
@@ -301,19 +301,10 @@ class TubularToolpathServer:
                 cut_normal = np.cross(center_line_points[i+1] - rotated_cut_direction, center_line_points[i] - rotated_cut_direction)
 
                 #cut surface to create toolpath segment
-                rotation_segement = self.createRotationSegment(mesh_segments[i], cut_normal, rotated_cut_direction, middle, i, r)
-                gap_filter.addSegment(rotation_segement)
+                rotation_segment = self.createRotationSegment(mesh_segments[i], cut_normal, rotated_cut_direction, middle, i, r)
+                gap_filter.addSegment(rotation_segment)
 
-                if(i == 25): 
-                    saveDebugLine(center_line_points[i+1], center_line_points[i], os.path.join(DATA_PATH ,"debug/centerline_25.vtp"))
-                    # egal = rotated_cut_direction - middle
-                    # egal = [0, 0, 0.1]
-                    # rectangle = pv.geometric_objects.Rectangle([center_line_points[i-1], center_line_points[i+1], center_line_points[i-1] + egal, center_line_points[i+1]] + egal)
-                    # rectangle = pv.Line(center_line_points[i-1], center_line_points[i+1])
-                    # rectangle.plot(show_edges=True, line_width=5)
-                    # rectangle.save(os.path.join(DATA_PATH ,"debug/rectangle_" + str(r) + ".vtp"))
-
-            combined_rotation_segment = gap_filter.getCombinedRotationSegement()
+            combined_rotation_segment = gap_filter.getCombinedRotationSegment()
 
             if self.debug:
                 self.debug_rotation_vector.saveVtp(DATA_PATH)
@@ -339,9 +330,9 @@ class TubularToolpathServer:
 
         while len(centerline_points) < self.centerline_minimal_point_size_treshold :
             # fill gaps and create mesh with open3d
-            rospy.loginfo('Loading pointcload and closing gaps.')
+            rospy.loginfo('Loading pointcloud and closing gaps.')
             watertight_stl_path = os.path.join(DATA_PATH, 'tmp/watertight_coil.stl')
-            cropAndFillGapsInMesh(ply_path, watertight_stl_path, self.z_clip_height, self.voxel_down_sample_size, self.debug)
+            poissonSurfaceReconstruction(ply_path, watertight_stl_path, self.voxel_down_sample_size, self.debug)
 
             # smooth mesh
             watertight_mesh = loadStl(watertight_stl_path) 
@@ -353,7 +344,7 @@ class TubularToolpathServer:
             smoothed_clean_mesh = cleaner.GetOutput()
 
             # clip mesh
-            clipped_mesh = clipMeshAtZaxis(smoothed_clean_mesh, self.z_clip_height)
+            clipped_mesh = clipMeshAtZAxis(smoothed_clean_mesh, self.z_clip_height)
             # if(self.debug): renderVtkPolydata(clipped_mesh)
             clipped_vtp_path = os.path.join(DATA_PATH, 'tmp/clipped_coil.vtp')
             saveVtp(clipped_vtp_path, clipped_mesh)
@@ -409,7 +400,7 @@ class TubularToolpathServer:
             number_of_poses += len(pose_array.poses)
         
         elapsed_time = timer() - start_time
-        rospy.loginfo('Successfully createded toolpath with %i rasters and %i poses!', len(raster_array), number_of_poses)
+        rospy.loginfo('Successfully created toolpath with %i rasters and %i poses!', len(raster_array), number_of_poses)
         rospy.loginfo('Computation of toolpath took %i seconds', elapsed_time)
         return raster_array, raster_degrees
 

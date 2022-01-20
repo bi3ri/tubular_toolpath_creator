@@ -1,22 +1,16 @@
 #!/usr/bin/env python
-# from cmath import sqrt
+
 import vtk
-# import math
 import numpy as np
 import open3d as o3d
-import matplotlib.pyplot as plt #fuer density
+import matplotlib.pyplot as plt 
 from scipy.spatial.transform import Rotation
 import rospy
 import pyvista as pv
 from visualization_msgs.msg import MarkerArray, Marker
 from geometry_msgs.msg import Point, Pose, PoseArray
-from math import pi ,sin, cos, sqrt, radians
-
-import transforms3d
-from pytransform3d import rotations as pr
-
+from math import sin, cos, sqrt, radians
 import tf.transformations as tr
-
 
 def vtkPointsToNumpyArrayList(vtkpoints):
     points = []
@@ -54,18 +48,13 @@ def loadPly(path):
 def savePly(path, mesh):
     writer = vtk.vtkPLYWriter()
     writer.SetFileName(path)
-    # writer.vtkSetFilePathMacro(path)
     writer.SetInputData(mesh)
-    # writer.SetFileTypeToASCII()
-    # writer.Update()
     writer.Write()
 
 def saveVtp(path, mesh):
     writer = vtk.vtkXMLPolyDataWriter()
     writer.SetFileName(path)
-    # writer.vtkSetFilePathMacro(path)
     writer.SetInputData(mesh)
-    # writer.Update()
     writer.Write()
 
 def reducePolylinePointResolution(polyline, targetReduction):
@@ -84,7 +73,7 @@ def smoothMesh(mesh, smoothing_mesh_factor):
     smooth.Update()
     return smooth.GetOutput()
 
-def clipMeshAtZaxis(mesh, z_height):
+def clipMeshAtZAxis(mesh, z_height):
     clip_plane_middle = vtk.vtkPlane()
     clip_plane_middle.SetNormal((0,0,1))
     clip_plane_middle.SetOrigin((0,0, z_height)) 
@@ -108,7 +97,6 @@ def polyDataToActor(polydata):
         mapper.SetInputConnection(polydata.GetProducerPort())
     actor = vtk.vtkActor()
     actor.SetMapper(mapper)
-    #actor.GetProperty().SetRepresentationToWireframe()
     actor.GetProperty().SetColor(0.5, 0.5, 1.0)
     return actor
 
@@ -142,16 +130,11 @@ def convertToPose(point, vx, vy, vz):
 
 def rotatePointAroundAxis(p, axis, theta):
     theta = radians(theta)
-    axis = axis / np.linalg.norm(axis)  # normalize the rotation vector first
+    axis = axis / np.linalg.norm(axis)
     rot = Rotation.from_rotvec(theta * axis)
     return rot.apply(p)
 
 def rotatePointAroundTranslatedAxis(o, d, p, theta):
-    """
-    o: origin
-    d: direction_vector
-    theta: rotation degree
-    """
     d = normalize(d)
     theta = radians(theta)
     a, b, c = o[0], o[1], o[2]
@@ -174,12 +157,8 @@ def euclideanDistancePose(p1, p2):
     z_dis = p1[2] - p2[2]
     return sqrt(x_dis**2 + y_dis**2 + z_dis**2)
 
-def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sample_size = 0.01, debug=False):
+def poissonSurfaceReconstruction(input_path, output_path, voxel_down_sample_size = 0.01, debug=False):
     pcd = o3d.io.read_point_cloud(input_path)
-    # crop_bounding_box = o3d.geometry.AxisAlignedBoundingBox([0,0, z_crop_height], [9999,9999,9999])
-    # cropped_pcd = pcd.crop(crop_bounding_box)
-    # if debug: o3d.visualization.draw_geometries([cropped_pcd])
-    
     down_pcd = pcd.voxel_down_sample(voxel_down_sample_size) 
     if debug: o3d.visualization.draw_geometries([down_pcd])
     
@@ -211,8 +190,6 @@ def cropAndFillGapsInMesh(input_path, output_path, z_crop_height, voxel_down_sam
     o3d.io.write_triangle_mesh(output_path, mesh)
 
 def renderVtkPolydata(polydata):
-    """Wrap the provided vtkPolyData object in a mapper and an actor, returning
-    the actor."""
     mapper = vtk.vtkPolyDataMapper()
 
     mapper.SetInputData(polydata)
@@ -241,7 +218,6 @@ def renderVtkPolydata(polydata):
 def convertRasterArrayToAxisMarkers(raster_array, 
                         namespace = 'debug_poses', 
                         frame_id = 'world', 
-                        offset = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0], 
                         axis_scale = 0.001, 
                         axis_length = 0.01):
 
@@ -313,11 +289,9 @@ def _create_line_marker(color, frame_id, namespace, axis_scale):
     line_marker.color.b = float(color[2])
     line_marker.color.a = float(color[3])
     line_marker.header.frame_id = frame_id
-    # line_marker.header.stamp = rospy.Time.now()
     line_marker.type = line_marker.LINE_LIST
     line_marker.lifetime = rospy.Duration(0)
     line_marker.ns = namespace
-    # line_marker.scale = (axis_scale, 0, 0)
     line_marker.scale.x = axis_scale
     line_marker.scale.y = 0.0
     line_marker.scale.z = 0.0
@@ -329,7 +303,6 @@ def _create_axis_points(pose, direction, axis_length):
     point1.y = float(pose.position.y)
     point1.z = float(pose.position.z)
 
-    # qx, qy, qz, qw =  pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w
     quat = [pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w]
     r = Rotation.from_quat(quat)
 

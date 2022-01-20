@@ -3,7 +3,6 @@
 import sys
 import vtk
 from vmtk import vtkvmtk
-# from vmtk.vmtkcenterlines import vmtkCenterlines
 from vmtkcenterlines import vmtkCenterlines
 
 def saveVtp(path, mesh):
@@ -35,7 +34,6 @@ class ToolpathCenterline:
 
     def run(self):
         capped_surface, capCenterIds = self.capSurface()
-
         assert((capCenterIds.GetNumberOfIds()) == 2)
 
         sourcePoint = capped_surface.GetPoint(capCenterIds.GetId(0))
